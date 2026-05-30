@@ -47,7 +47,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhBRjFDMzJEMkM2QTdERTgKUldUb2ZXb3NMY1B4aW9QdEdXWlpqY2NQQndrK3l6RzdNNHNqQlF0WWhaelQ3RVFQdXJ5M0UwaGcK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI4M0NGMUJBNERGMzBCMjUKUldRbEMvTk51dkU4dUNBSDFNYnVQL29Od0lPSGw5NlNCK0oxcHdLRW9yWUNWVjAvcnpPKytpc2YK",
       "endpoints": [
         "https://github.com/katrate/notie/releases/latest/download/latest.json"
       ]
