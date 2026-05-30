@@ -40,17 +40,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "windows": {
       "nsis": {}
     }
   },
   "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI4M0NGMUJBNERGMzBCMjUKUldRbEMvTk51dkU4dUNBSDFNYnVQL29Od0lPSGw5NlNCK0oxcHdLRW9yWUNWVjAvcnpPKytpc2YK",
-      "endpoints": [
-        "https://github.com/katrate/notie/releases/latest/download/latest.json"
-      ]
-    }
   }
 }
