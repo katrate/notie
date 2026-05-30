@@ -1,0 +1,768 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-on-background: #e5e2e1;
+  --color-on-tertiary: #233143;
+  --color-on-surface-variant: #bec7d4;
+  --color-secondary-fixed-dim: #d0bcff;
+  --color-surface-tint: #98cbff;
+  --color-on-error: #690005;
+  --color-on-primary-fixed: #001d33;
+  --color-surface-container-high: #2a2a2a;
+  --color-tertiary-container: #8f9eb3;
+  --color-surface-bright: #3a3939;
+  --color-inverse-surface: #e5e2e1;
+  --color-on-secondary-fixed: #23005c;
+  --color-secondary-fixed: #e9ddff;
+  --color-primary-fixed-dim: #98cbff;
+  --color-inverse-primary: #00629d;
+  --color-on-tertiary-fixed-variant: #39485a;
+  --color-surface-container-lowest: #0e0e0e;
+  --color-secondary: #d0bcff;
+  --color-primary-fixed: #cfe5ff;
+  --color-on-surface: #e5e2e1;
+  --color-on-error-container: #ffdad6;
+  --color-error: #ffb4ab;
+  --color-outline-variant: #3f4852;
+  --color-on-primary: #003354;
+  --color-on-primary-container: #00375a;
+  --color-surface-variant: #353534;
+  --color-on-secondary: #3c0091;
+  --color-tertiary-fixed: #d4e4fa;
+  --color-surface-dim: #131313;
+  --color-tertiary-fixed-dim: #b9c8de;
+  --color-on-tertiary-container: #273547;
+  --color-surface-container-highest: #353534;
+  --color-primary: #98cbff;
+  --color-inverse-on-surface: #313030;
+  --color-surface-container-low: #1c1b1b;
+  --color-error-container: #93000a;
+  --color-surface-container: #201f1f;
+  --color-tertiary: #b9c8de;
+  --color-primary-container: #00a3ff;
+  --color-background: #131313;
+  --color-on-secondary-fixed-variant: #5516be;
+  --color-secondary-container: #571bc1;
+  --color-on-tertiary-fixed: #0d1c2d;
+  --color-on-primary-fixed-variant: #004a77;
+  --color-on-secondary-container: #c4abff;
+  --color-surface: #131313;
+  --color-outline: #88919d;
+
+  --spacing-margin-desktop: 32px;
+  --spacing-gutter: 24px;
+  --spacing-margin-mobile: 16px;
+  --spacing-panel-padding: 20px;
+  --spacing-unit: 8px;
+
+  --font-headline-lg: "Geist";
+  --font-body-lg: "Geist";
+  --font-label-sm: "JetBrains Mono";
+  --font-label-md: "JetBrains Mono";
+  --font-headline-md: "Geist";
+  --font-body-md: "Geist";
+  --font-headline-sm: "Geist";
+  --font-display-lg: "Geist";
+}
+
+@layer base {
+  :root {
+    --bg-deep: #050505;
+  }
+  [data-theme="light"] {
+    --color-on-background: #1c1b1b;
+    --color-on-surface-variant: #49454f;
+    --color-surface-tint: #00629d;
+    --color-surface-container-high: #e6e0e9;
+    --color-surface-bright: #fef7ff;
+    --color-inverse-surface: #313030;
+    --color-primary-fixed-dim: #00629d;
+    --color-inverse-primary: #98cbff;
+    --color-surface-container-lowest: #ffffff;
+    --color-on-surface: #1c1b1b;
+    --color-on-error-container: #410002;
+    --color-error: #ba1a1a;
+    --color-outline-variant: #cac4d0;
+    --color-on-primary: #ffffff;
+    --color-surface-variant: #e7e0ec;
+    --color-surface-dim: #d8d2da;
+    --color-surface-container-highest: #e6e0e9;
+    --color-primary: #00629d;
+    --color-inverse-on-surface: #f4eff4;
+    --color-surface-container-low: #f0eaf2;
+    --color-error-container: #ffdad6;
+    --color-surface-container: #ece6f0;
+    --color-background: #fef7ff;
+    --color-outline: #79747e;
+    --color-surface: #fef7ff;
+    --color-on-surface-variant: #49454f;
+  }
+  body {
+    background: var(--app-bg, var(--color-background));
+    color: var(--color-on-background);
+    overflow: auto;
+  }
+}
+
+@layer utilities {
+  .text-headline-lg {
+    font-size: 32px;
+    line-height: 1.2;
+    letter-spacing: -0.03em;
+    font-weight: 600;
+  }
+  .text-body-lg {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: -0.01em;
+    font-weight: 400;
+  }
+  .text-label-sm {
+    font-size: 10px;
+    line-height: 1.0;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+  }
+  .text-label-md {
+    font-size: 12px;
+    line-height: 1.0;
+    letter-spacing: 0.02em;
+    font-weight: 500;
+  }
+  .text-headline-md {
+    font-size: 24px;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+  .text-body-md {
+    font-size: 14px;
+    line-height: 1.6;
+    letter-spacing: -0.01em;
+    font-weight: 400;
+  }
+  .text-headline-sm {
+    font-size: 20px;
+    line-height: 1.4;
+    letter-spacing: -0.02em;
+    font-weight: 500;
+  }
+  .text-display-lg {
+    font-size: 48px;
+    line-height: 1.1;
+    letter-spacing: -0.04em;
+    font-weight: 700;
+  }
+}
+
+@layer components {
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+    display: inline-block;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+  }
+  .glass-panel {
+    background: rgba(20, 20, 20, 0.6);
+    backdrop-filter: blur(40px);
+    border: 1px solid rgba(229, 226, 225, 0.1);
+  }
+  .glass-card {
+    background: rgba(229, 226, 225, 0.05);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(229, 226, 225, 0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .glass-card:hover {
+    background: rgba(229, 226, 225, 0.08);
+    border-color: rgba(152, 203, 255, 0.3);
+    box-shadow: 0 0 20px rgba(152, 203, 255, 0.1);
+    transform: translateY(-2px);
+  }
+  .input-etched {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(136, 145, 157, 0.2);
+    transition: all 0.3s ease;
+  }
+  .input-etched:focus {
+    border-color: var(--color-primary);
+    outline: none;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+  .input-recessed {
+    background: rgba(14, 14, 14, 0.4);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(229, 226, 225, 0.1);
+  }
+  .input-recessed:focus {
+    border-color: var(--color-primary);
+    outline: none;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 0 2px rgba(152, 203, 255, 0.2);
+  }
+  .glow-button {
+    box-shadow: 0 0 0px rgba(152, 203, 255, 0);
+    transition: all 0.3s ease;
+  }
+  .glow-button:hover {
+    box-shadow: 0 0 20px rgba(152, 203, 255, 0.3);
+    transform: translateY(-1px);
+  }
+  .btn-glow-primary {
+    box-shadow: 0 0 0px rgba(152, 203, 255, 0);
+    transition: all 0.3s ease;
+  }
+  .btn-glow-primary:hover {
+    box-shadow: 0 0 15px rgba(152, 203, 255, 0.4);
+    transform: scale(1.02);
+  }
+  .glow-text {
+    text-shadow: 0 0 15px rgba(152, 203, 255, 0.4);
+  }
+  .graph-node {
+    transition: all 0.3s ease;
+    filter: drop-shadow(0 0 8px rgba(152, 203, 255, 0.3));
+  }
+  .graph-node:hover {
+    filter: drop-shadow(0 0 12px rgba(152, 203, 255, 0.6));
+    transform: scale(1.1);
+  }
+  .aurora {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 50% 50%, rgba(0, 163, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 20% 30%, rgba(87, 27, 193, 0.05) 0%, transparent 40%);
+    animation: rotate 60s linear infinite;
+    z-index: 0;
+    pointer-events: none;
+  }
+  @keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes fadeScaleIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .particle {
+    position: absolute;
+    background: #98cbff;
+    border-radius: 50%;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.page-link-block-wrapper {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.page-link-block-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+  margin: 4px 0;
+  user-select: none;
+  transition: background 0.15s, border-color 0.15s;
+  position: relative;
+}
+
+.page-link-block-node:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(152, 203, 255, 0.3);
+}
+
+.page-link-icon {
+  font-size: 16px;
+  opacity: 0.7;
+}
+
+.page-link-title {
+  font-size: 14px;
+}
+
+.page-link-close-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(220, 38, 38, 0.7);
+  color: white;
+  font-size: 12px !important;
+  cursor: pointer !important;
+  opacity: 0.7;
+  transition: opacity 0.15s ease, background 0.15s ease, transform 0.15s ease !important;
+  flex-shrink: 0;
+  line-height: 1 !important;
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+}
+
+[data-page-link-block]:hover .page-link-close-btn {
+  opacity: 1;
+  background: rgba(220, 38, 38, 0.9);
+}
+
+.page-link-close-btn:hover {
+  opacity: 1 !important;
+  background: rgba(220, 38, 38, 1) !important;
+  transform: scale(1.15);
+}
+
+/* Table row drag-and-drop styles — applied to ALL cells in the row */
+tr.drop-above td {
+  box-shadow: inset 0 3px 0 var(--color-primary) !important;
+}
+tr.drop-below td {
+  box-shadow: inset 0 -3px 0 var(--color-primary) !important;
+}
+tr.drop-above,
+tr.drop-below {
+  position: relative;
+  z-index: 5;
+  transition: box-shadow 0.1s ease-out;
+}
+
+/* Table column drag-and-drop styles — applied to the target th */
+th.drop-left {
+  box-shadow: inset 3px 0 0 var(--color-primary) !important;
+}
+th.drop-right {
+  box-shadow: inset -3px 0 0 var(--color-primary) !important;
+}
+th.drop-left,
+th.drop-right {
+  position: relative;
+  z-index: 5;
+  transition: box-shadow 0.1s ease-out;
+}
+
+/* ── Sidebar drag-and-drop styles ── */
+
+/* Source row being dragged — jiggle + fade-out placeholder */
+.side-dragging-source {
+  animation: sideJiggle 0.6s ease-in-out infinite;
+  opacity: 0.3;
+  pointer-events: none !important;
+  filter: grayscale(0.6);
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+@keyframes sideJiggle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  15% { transform: rotate(-1deg) scale(0.96); }
+  30% { transform: rotate(1.2deg) scale(0.96); }
+  45% { transform: rotate(-0.8deg) scale(0.96); }
+  60% { transform: rotate(0.8deg) scale(0.96); }
+  75% { transform: rotate(-0.4deg) scale(0.97); }
+  90% { transform: rotate(0.4deg) scale(0.97); }
+}
+
+/* Placeholder gap — other items slide apart as source shrinks */
+.side-drag-placeholder {
+  position: relative;
+  min-height: 4px;
+  margin: 2px 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  animation: placeholderDropIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+  pointer-events: none;
+}
+
+@keyframes placeholderDropIn {
+  from {
+    opacity: 0;
+    transform: scaleY(0.1);
+    min-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+    min-height: 4px;
+  }
+}
+
+/* ── Sidebar drag-and-drop guideline styles ── */
+
+/* Drop-into (reparent) highlight — smooth pulsing ring */
+.drag-over-target {
+  position: relative !important;
+}
+.drag-over-target::after {
+  content: '' !important;
+  position: absolute !important;
+  inset: -1px !important;
+  border-radius: 8px !important;
+  border: 2px solid color-mix(in srgb, var(--color-primary) 50%, transparent) !important;
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent) !important;
+  pointer-events: none !important;
+  animation: indicatorSlideIn 0.15s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Insertion line above the item */
+.drag-over-top {
+  position: relative !important;
+}
+.drag-over-top::after {
+  content: '' !important;
+  position: absolute !important;
+  left: 4px !important;
+  right: 4px !important;
+  top: -4px !important;
+  height: 8px !important;
+  border-radius: 4px !important;
+  background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 70%, white)) !important;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--color-primary) 70%, transparent), 0 0 40px color-mix(in srgb, var(--color-primary) 30%, transparent) !important;
+  pointer-events: none !important;
+  animation: indicatorSlideIn 0.12s cubic-bezier(0.4, 0, 0.2, 1) both;
+  z-index: 10;
+}
+
+/* Insertion line below the item */
+.drag-over-bottom {
+  position: relative !important;
+}
+.drag-over-bottom::after {
+  content: '' !important;
+  position: absolute !important;
+  left: 4px !important;
+  right: 4px !important;
+  bottom: -4px !important;
+  height: 8px !important;
+  border-radius: 4px !important;
+  background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 70%, white)) !important;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--color-primary) 70%, transparent), 0 0 40px color-mix(in srgb, var(--color-primary) 30%, transparent) !important;
+  pointer-events: none !important;
+  animation: indicatorSlideIn 0.12s cubic-bezier(0.4, 0, 0.2, 1) both;
+  z-index: 10;
+}
+
+/* Fade-in + scale animation for drop indicators */
+@keyframes indicatorSlideIn {
+  from {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+/* ── Project drag-and-drop styles ── */
+
+/* Insertion line above the project */
+.project-drag-over-above {
+  position: relative !important;
+}
+.project-drag-over-above::after {
+  content: '' !important;
+  position: absolute !important;
+  left: 4px !important;
+  right: 4px !important;
+  top: -4px !important;
+  height: 8px !important;
+  border-radius: 4px !important;
+  background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 70%, white)) !important;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--color-primary) 70%, transparent), 0 0 40px color-mix(in srgb, var(--color-primary) 30%, transparent) !important;
+  pointer-events: none !important;
+  animation: indicatorSlideIn 0.12s cubic-bezier(0.4, 0, 0.2, 1) both;
+  z-index: 10;
+}
+
+/* Insertion line below the project */
+.project-drag-over-below {
+  position: relative !important;
+}
+.project-drag-over-below::after {
+  content: '' !important;
+  position: absolute !important;
+  left: 4px !important;
+  right: 4px !important;
+  bottom: -4px !important;
+  height: 8px !important;
+  border-radius: 4px !important;
+  background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 70%, white)) !important;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--color-primary) 70%, transparent), 0 0 40px color-mix(in srgb, var(--color-primary) 30%, transparent) !important;
+  pointer-events: none !important;
+  animation: indicatorSlideIn 0.12s cubic-bezier(0.4, 0, 0.2, 1) both;
+  z-index: 10;
+}
+
+/* ── Board card drag-and-drop styles ── */
+
+/* Drag ghost card — coloured border glow matching column */
+.board-drag-ghost {
+  pointer-events: none;
+  z-index: 9999;
+  transition: none;
+  opacity: 0.92;
+  border-radius: 12px;
+}
+
+/* Board card drop insertion line — animated */
+.board-drop-indicator {
+  height: 4px;
+  border-radius: 4px;
+  margin: -1px 0;
+  position: relative;
+  z-index: 10;
+  animation: boardDropIn 0.15s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes boardDropIn {
+  from {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+/* Column highlight when dragging card over empty area */
+.board-col-drop-target {
+  outline: 2px dashed color-mix(in srgb, var(--color-primary) 40%, transparent);
+  outline-offset: -2px;
+  transition: outline 0.1s ease;
+}
+
+/* Column border indicator when reordering columns */
+.board-col-reorder-left {
+  box-shadow: inset 3px 0 0 var(--col-color, var(--color-primary)) !important;
+  transition: box-shadow 0.12s ease-out;
+}
+.board-col-reorder-right {
+  box-shadow: inset -3px 0 0 var(--col-color, var(--color-primary)) !important;
+  transition: box-shadow 0.12s ease-out;
+}
+
+/* ── Code block styles ── */
+.ProseMirror pre {
+  background: rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid rgba(136, 145, 157, 0.15);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 12px 0;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.ProseMirror pre .hljs-keyword { color: #c792ea; }
+.ProseMirror pre .hljs-string { color: #c3e88d; }
+.ProseMirror pre .hljs-number { color: #f78c6c; }
+.ProseMirror pre .hljs-comment { color: #546e7a; font-style: italic; }
+.ProseMirror pre .hljs-function { color: #82aaff; }
+.ProseMirror pre .hljs-built_in { color: #ffcb6b; }
+.ProseMirror pre .hljs-title { color: #ffcb6b; }
+.ProseMirror pre .hljs-attr { color: #f07178; }
+.ProseMirror pre .hljs-params { color: #f07178; }
+.ProseMirror pre .hljs-literal { color: #ff869a; }
+.ProseMirror pre .hljs-type { color: #ffcb6b; }
+.ProseMirror pre .hljs-tag { color: #f07178; }
+.ProseMirror pre .hljs-name { color: #f07178; }
+.ProseMirror pre .hljs-selector-class { color: #82aaff; }
+.ProseMirror pre .hljs-selector-id { color: #f07178; }
+.ProseMirror pre .hljs-selector-tag { color: #c792ea; }
+.ProseMirror pre .hljs-regexp { color: #c3e88d; }
+.ProseMirror pre .hljs-symbol { color: #f78c6c; }
+.ProseMirror pre .hljs-deletion { color: #ff5370; }
+.ProseMirror pre .hljs-addition { color: #91b859; }
+.ProseMirror pre .hljs-section { color: #82aaff; }
+
+/* Code block language selector */
+.ProseMirror pre[data-language]::before {
+  content: attr(data-language);
+  display: block;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: rgba(136, 145, 157, 0.5);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Callout block styles ── */
+[data-callout-block] {
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+[data-callout-block]:hover {
+  filter: brightness(1.15);
+}
+[data-callout-content] {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+[data-callout-content] p {
+  margin: 0;
+}
+
+/* ── Toggle block styles ── */
+details[data-toggle-block] {
+  transition: all 0.2s ease;
+}
+details[data-toggle-block] summary[data-toggle-summary] {
+  list-style: none;
+}
+details[data-toggle-block] summary[data-toggle-summary]::-webkit-details-marker {
+  display: none;
+}
+details[data-toggle-block] summary[data-toggle-summary]::before {
+  content: 'chevron_right';
+  font-family: 'Material Symbols Outlined';
+  font-size: 18px;
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  transition: transform 0.2s ease;
+  color: rgba(136, 145, 157, 0.6);
+}
+details[data-toggle-block][open] summary[data-toggle-summary]::before {
+  transform: translateY(-50%) rotate(90deg);
+}
+details[data-toggle-block] summary[data-toggle-summary]:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+details[data-toggle-block] > :not(summary) {
+  padding: 4px 12px 8px 36px;
+}
+
+/* ── Divider / Horizontal rule styles ── */
+.ProseMirror hr {
+  border: none;
+  border-top: 1px solid rgba(136, 145, 157, 0.2);
+  margin: 20px 0;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+.ProseMirror hr:hover {
+  border-top-color: rgba(136, 145, 157, 0.4);
+}
+.ProseMirror hr.ProseMirror-selectednode {
+  border-top-color: var(--color-primary);
+}
+
+.ProseMirror {
+  caret-color: var(--color-on-background);
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--color-on-surface-variant);
+  opacity: 0.4;
+}
+
+/* ── Permission Dialog Styles ── */
+
+/* Animated pulse ring behind the mic icon */
+.permission-pulse-ring {
+  animation: permissionPulse 2s ease-in-out infinite;
+}
+
+@keyframes permissionPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.15;
+  }
+}
+
+/* Permission card entrance */
+.permission-card {
+  background: color-mix(in srgb, var(--color-surface) 98%, var(--color-primary) 2%);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-outline) 15%, transparent),
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    0 0 80px color-mix(in srgb, var(--color-primary) 5%, transparent);
+}
+
+/* Browser prompt mockup glow */
+.permission-browser-prompt {
+  background: color-mix(in srgb, var(--color-surface) 96%, var(--color-primary) 4%);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-outline) 10%, transparent);
+}
+
+/* Mic icon glow on Allow button */
+.permission-allow-btn {
+  position: relative;
+  overflow: hidden;
+}
+.permission-allow-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, transparent 40%, color-mix(in srgb, var(--color-primary) 15%, transparent));
+  pointer-events: none;
+  animation: permissionShimmer 3s ease-in-out infinite;
+}
+
+@keyframes permissionShimmer {
+  0%, 100% { opacity: 0; transform: translateX(-100%); }
+  50% { opacity: 1; transform: translateX(100%); }
+}
+
+/* ── Audio recording waveform animation ── */
+@keyframes waveform-bar {
+  0% {
+    transform: scaleY(0.3);
+    opacity: 0.5;
+  }
+  25% {
+    transform: scaleY(1.2);
+    opacity: 1;
+  }
+  50% {
+    transform: scaleY(0.5);
+    opacity: 0.7;
+  }
+  75% {
+    transform: scaleY(1.0);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scaleY(0.2);
+    opacity: 0.4;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(229, 226, 225, 0.1);
+  border-radius: 10px;
+}
