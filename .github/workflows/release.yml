@@ -1,0 +1,110 @@
+# Notie Release Workflow
+#
+# This workflow automates building Notie for Windows, macOS, and Linux,
+# signs the updater artifacts, and creates a GitHub Release.
+#
+# ## How to trigger a release
+#
+# 1. Update the version in `package.json` and `src-tauri/tauri.conf.json`
+# 2. Commit and push the version bump
+# 3. Create and push a version tag:
+#    git tag v0.2.0
+#    git push origin v0.2.0
+# 4. The workflow will build all platform binaries and create a draft release
+# 5. Review the draft release on GitHub, add release notes, then publish it
+#
+# ## Required GitHub Secrets
+#
+# - TAURI_PRIVATE_KEY  – Contents of your Tauri signing private key file
+# - TAURI_KEY_PASSWORD – The password you set when generating the key
+#
+# To set these up:
+#   1. Run: cat ~/.tauri/notie.key   (or the path where your key is stored)
+#   2. Copy the entire file contents
+#   3. Go to GitHub repo → Settings → Secrets and variables → Actions
+#   4. Add TAURI_PRIVATE_KEY with the copied contents
+#   5. Add TAURI_KEY_PASSWORD with your key password
+#
+
+name: 'Publish Notie'
+
+on:
+  workflow_dispatch:
+    # Allows manual triggering from the Actions tab
+  push:
+    tags:
+      - 'v*' # Triggers on tags like v0.2.0, v1.0.0, etc.
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write # Required to create releases and upload artifacts
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest'
+            args: '--target x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: ''
+          - platform: 'windows-latest'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'Notie v__VERSION__'
+          releaseBody: |
+            ## Notie v__VERSION__
+
+            See the assets below to download and install this version.
+
+            ### What's new
+
+            _Add release notes here before publishing_
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
