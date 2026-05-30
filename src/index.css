@@ -97,6 +97,30 @@
     --color-outline: #79747e;
     --color-surface: #fef7ff;
     --color-on-surface-variant: #49454f;
+    --input-bg: rgba(255, 255, 255, 0.8);
+    --input-border: rgba(0, 0, 0, 0.12);
+    --input-hover-border: rgba(0, 0, 0, 0.2);
+  }
+  [data-theme="light"] .input-etched {
+    background: rgba(255, 255, 255, 0.7);
+    border-color: rgba(0, 0, 0, 0.12);
+  }
+  [data-theme="light"] .input-etched:hover {
+    background: rgba(255, 255, 255, 0.85);
+    border-color: rgba(0, 0, 0, 0.2);
+  }
+  [data-theme="light"] .input-etched:focus {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 15%, transparent);
+  }
+  [data-theme="light"] .glow-button:hover {
+    box-shadow: 0 0 20px color-mix(in srgb, var(--color-primary) 25%, transparent);
+  }
+  [data-theme="light"] .glass-panel {
+    background: rgba(255, 255, 255, 0.6);
+    border-color: rgba(0, 0, 0, 0.06);
+    backdrop-filter: blur(40px);
   }
   body {
     background: var(--app-bg, var(--color-background));
@@ -189,10 +213,29 @@
     border: 1px solid rgba(136, 145, 157, 0.2);
     transition: all 0.3s ease;
   }
+  .input-etched:hover {
+    border-color: rgba(136, 145, 157, 0.35);
+    background: rgba(0, 0, 0, 0.45);
+  }
   .input-etched:focus {
     border-color: var(--color-primary);
     outline: none;
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 15%, transparent), inset 0 2px 4px rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.5);
+  }
+  .input-etched::placeholder {
+    color: color-mix(in srgb, var(--color-outline) 50%, transparent);
+    font-weight: 400;
+    letter-spacing: 0.01em;
+  }
+  .input-etched:focus::placeholder {
+    color: color-mix(in srgb, var(--color-outline) 30%, transparent);
+  }
+  .input-group-focus {
+    transition: all 0.3s ease;
+  }
+  .input-group-focus:focus-within {
+    border-color: var(--color-primary);
   }
   .input-recessed {
     background: rgba(14, 14, 14, 0.4);
@@ -679,6 +722,12 @@ details[data-toggle-block] > :not(summary) {
 
 /* ── Permission Dialog Styles ── */
 
+.permission-overlay {
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
 /* Animated pulse ring behind the mic icon */
 .permission-pulse-ring {
   animation: permissionPulse 2s ease-in-out infinite;
@@ -698,21 +747,59 @@ details[data-toggle-block] > :not(summary) {
 /* Permission card entrance */
 .permission-card {
   background: color-mix(in srgb, var(--color-surface) 98%, var(--color-primary) 2%);
-  backdrop-filter: blur(24px);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border: 1px solid color-mix(in srgb, var(--color-outline) 18%, transparent);
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--color-outline) 15%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-primary) 8%, transparent),
     0 8px 32px rgba(0, 0, 0, 0.45),
     0 0 80px color-mix(in srgb, var(--color-primary) 5%, transparent);
+  animation: permissionCardIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes permissionCardIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Permission card glow ring on hover */
+.permission-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary) 12%, transparent),
+    transparent 40%,
+    color-mix(in srgb, var(--color-secondary) 8%, transparent) 70%,
+    transparent
+  );
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.permission-card:hover::before {
+  opacity: 1;
 }
 
 /* Browser prompt mockup glow */
 .permission-browser-prompt {
   background: color-mix(in srgb, var(--color-surface) 96%, var(--color-primary) 4%);
   border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-outline) 12%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-outline) 10%, transparent);
 }
 
-/* Mic icon glow on Allow button */
+/* Allow button with animated glow */
 .permission-allow-btn {
   position: relative;
   overflow: hidden;
@@ -730,6 +817,23 @@ details[data-toggle-block] > :not(summary) {
 @keyframes permissionShimmer {
   0%, 100% { opacity: 0; transform: translateX(-100%); }
   50% { opacity: 1; transform: translateX(100%); }
+}
+
+/* Light theme overrides for permission dialogs */
+[data-theme="light"] .permission-overlay {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] .permission-card {
+  background: color-mix(in srgb, var(--color-surface) 96%, var(--color-primary) 4%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-outline) 12%, transparent),
+    0 8px 40px rgba(0, 0, 0, 0.12),
+    0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .permission-browser-prompt {
+  border-color: color-mix(in srgb, var(--color-outline) 15%, transparent);
 }
 
 /* ── Audio recording waveform animation ── */

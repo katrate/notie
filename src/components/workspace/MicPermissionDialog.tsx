@@ -27,7 +27,7 @@ export function MicPermissionDialog({ onAllow, onDismiss }: Props) {
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 transition-all duration-300 ${
+      className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 permission-overlay transition-all duration-300 ${
         visible ? 'opacity-100' : 'opacity-0'
       }`}
       style={{ backgroundColor: visible ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0)' }}

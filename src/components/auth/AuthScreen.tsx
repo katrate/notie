@@ -126,8 +126,8 @@ export function AuthScreen() {
           <form className="w-full space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-2">
               <label className="font-label-md text-label-md text-on-surface-variant ml-1" htmlFor="email">Email Address</label>
-              <div className="relative group">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors">alternate_email</span>
+              <div className="relative group input-group-focus">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors z-10">alternate_email</span>
                 <input 
                   className="w-full input-etched h-14 pl-12 pr-4 rounded-xl text-on-surface font-body-md placeholder:text-outline/50" 
                   id="email" 
@@ -149,8 +149,8 @@ export function AuthScreen() {
                   <a className="font-label-md text-label-md text-primary hover:underline transition-all" href="#">Forgot Password?</a>
                 )}
               </div>
-              <div className="relative group">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors">lock</span>
+              <div className="relative group input-group-focus">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors z-10">lock</span>
                 <input 
                   className="w-full input-etched h-14 pl-12 pr-12 rounded-xl text-on-surface font-body-md placeholder:text-outline/50" 
                   id="password" 

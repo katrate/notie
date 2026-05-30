@@ -1,6 +1,6 @@
 [package]
 name = "notie"
-version = "0.1.0"
+version = "0.1.1"
 description = "Notie - A modern note-taking app"
 authors = ["Notie Dev"]
 edition = "2021"
