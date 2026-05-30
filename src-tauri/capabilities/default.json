@@ -19,7 +19,6 @@
     },
     "dialog:default",
     "fs:default",
-    "process:default",
-    "updater:default"
+    "process:default"
   ]
 }
