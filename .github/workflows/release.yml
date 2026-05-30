@@ -88,20 +88,16 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Write signing key to file
-        shell: bash
-        run: |
-          printf '%s' "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > /tmp/notie.key
-      - name: Debug key file size
-        shell: bash
-        run: wc -c /tmp/notie.key
-
       - name: Build and release
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_KEY_PASSWORD }}
+        run: npm run tauri build ${{ matrix.args }}
+      - name: Upload artifacts
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY_PATH: /tmp/notie.key
-          TAURI_SIGNING_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
           releaseName: 'Notie v__VERSION__'
@@ -115,4 +111,3 @@ jobs:
             _Add release notes here before publishing_
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
