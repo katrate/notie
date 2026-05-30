@@ -4,7 +4,6 @@ import { useAuthStore } from '../../stores/authStore'
 import { useTemplateStore } from '../../stores/templateStore'
 import { useProjectStore } from '../../stores/projectStore'
 import { Tooltip } from '../Tooltip'
-import { UpdateModal } from '../updater/UpdateModal'
 import { useShortcutStore, SHORTCUT_DEFS, type ShortcutCombo, isMacPlatform } from '../../stores/shortcutStore'
 import { ShortcutCapture } from './ShortcutCapture'
 import {
@@ -18,7 +17,7 @@ import {
   type BackgroundColor,
 } from '../../stores/themeStore'
 
-type Tab = 'account' | 'appearance' | 'shortcuts' | 'templates' | 'updates'
+type Tab = 'account' | 'appearance' | 'shortcuts' | 'templates'
 type BGOption = { id: string; label: string; isSolid: boolean }
 
 function getGradientCSS(id: string, theme: ThemeMode): string {
@@ -42,7 +41,6 @@ function getGradientCSS(id: string, theme: ThemeMode): string {
 
 function SettingsModalContent({ onClose }: { onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<Tab>('account')
-  const [showUpdateModal, setShowUpdateModal] = useState(false)
   const { user, signOut } = useAuthStore()
   const { theme, accentColor, setTheme, setAccentColor } = useThemeStore()
   const bgStorageKey = `notie-bg-${theme}`
@@ -118,7 +116,6 @@ function SettingsModalContent({ onClose }: { onClose: () => void }) {
             <Tooltip label="Appearance settings" position="right"><TabSidebarButton label="Appearance" icon="palette" active={activeTab === 'appearance'} onClick={() => setActiveTab('appearance')} /></Tooltip>
             <Tooltip label="Keyboard shortcuts" position="right"><TabSidebarButton label="Shortcuts" icon="keyboard" active={activeTab === 'shortcuts'} onClick={() => setActiveTab('shortcuts')} /></Tooltip>
             <Tooltip label="Manage templates" position="right"><TabSidebarButton label="Templates" icon="bookmark" active={activeTab === 'templates'} onClick={() => setActiveTab('templates')} /></Tooltip>
-            <Tooltip label="Check for updates" position="right"><TabSidebarButton label="Updates" icon="system_update" active={activeTab === 'updates'} onClick={() => setActiveTab('updates')} /></Tooltip>
           </div>
 
           {/* Content */}
@@ -214,33 +211,6 @@ function SettingsModalContent({ onClose }: { onClose: () => void }) {
 
           {activeTab === 'templates' && (
             <TemplateManagerTab />
-          )}
-
-          {activeTab === 'updates' && (
-            <div className="space-y-4">
-              <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider mb-3">Software Updates</p>
-              <p className="text-sm text-on-surface-variant mb-4">
-                Check if a newer version of Notie is available. Updates are downloaded and installed from within the app.
-              </p>
-
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-surface-variant/20 border border-outline/10">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-[20px] text-primary">info</span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-on-surface">Current version</p>
-                  <p className="text-xs text-on-surface-variant">v0.1.0</p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setShowUpdateModal(true)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary text-on-primary text-sm font-medium hover:bg-primary/90 transition-colors"
-              >
-                <span className="material-symbols-outlined text-[18px]">system_update</span>
-                Check for Updates
-              </button>
-            </div>
           )}
 
           {activeTab === 'appearance' && (
@@ -376,8 +346,6 @@ function SettingsModalContent({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </div>
-
-      {showUpdateModal && <UpdateModal onClose={() => setShowUpdateModal(false)} />}
 
       <style>{`
         @keyframes modalPop {

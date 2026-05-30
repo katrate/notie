@@ -1,5 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { check } from '@tauri-apps/plugin-updater'
+import { useEffect, useState, useCallback } from 'react'
 import { useAuthStore } from './stores/authStore'
 import { useThemeStore, applyBackgroundForTheme } from './stores/themeStore'
 import { useProjectStore, fetchLastSession, checkNeedsOnboarding } from './stores/projectStore'
@@ -8,7 +7,6 @@ import { OnboardingScreen } from './components/auth/OnboardingScreen'
 import { ToastContainer } from './components/Toast'
 import { MainLayout } from './components/layout/MainLayout'
 import { CommandPalette } from './components/CommandPalette'
-import { UpdateModal } from './components/updater/UpdateModal'
 import { useToastStore } from './stores/toastStore'
 import { useCommandStore } from './stores/commandStore'
 import { useShortcutStore, SHORTCUT_DEFS } from './stores/shortcutStore'
@@ -28,7 +26,6 @@ function App() {
   )
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState<'checking' | 'show' | 'hidden'>('checking')
-  const [showUpdateModal, setShowUpdateModal] = useState(false)
 
   // First-login detection: after session is confirmed, check if onboarding is needed
   useEffect(() => {
@@ -227,8 +224,6 @@ function App() {
     <SessionRestorer />
     <ToastContainer />
     {showCommandPalette && <CommandPalette onClose={() => setShowCommandPalette(false)} />}
-    {showUpdateModal && <UpdateModal onClose={() => setShowUpdateModal(false)} />}
-    <UpdateChecker onUpdateAvailable={() => setShowUpdateModal(true)} />
   </>
 }
 
@@ -302,42 +297,6 @@ function SessionRestorer() {
   }, []);
 
   return null;
-}
-
-/** Silently checks for updates on startup and notifies the user if available */
-function UpdateChecker({ onUpdateAvailable }: { onUpdateAvailable: () => void }) {
-  const toast = useToastStore(s => s.toast)
-  const onUpdateRef = useRef(onUpdateAvailable)
-  onUpdateRef.current = onUpdateAvailable
-
-  useEffect(() => {
-    let cancelled = false
-
-    const runCheck = async () => {
-      try {
-        const update = await check()
-        if (cancelled) return
-
-        if (update?.version) {
-          toast(`Update v${update.version} is available! Open Settings → Updates to install.`, 'info', 8000)
-          onUpdateRef.current()
-        }
-      } catch {
-        // Silently fail — user can check manually in Settings
-      }
-    }
-
-    // Wait a bit for the app to fully load before checking
-    const timer = setTimeout(runCheck, 5000)
-
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  return null
 }
 
 export default App
