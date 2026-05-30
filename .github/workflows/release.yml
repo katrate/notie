@@ -15,15 +15,15 @@
 #
 # ## Required GitHub Secrets
 #
-# - TAURI_PRIVATE_KEY  – Contents of your Tauri signing private key file
-# - TAURI_KEY_PASSWORD – The password you set when generating the key
+# - TAURI_SIGNING_PRIVATE_KEY  – Contents of your Tauri signing private key file
+# - TAURI_SIGNING_KEY_PASSWORD – The password you set when generating the key
 #
 # To set these up:
 #   1. Run: cat ~/.tauri/notie.key   (or the path where your key is stored)
 #   2. Copy the entire file contents
 #   3. Go to GitHub repo → Settings → Secrets and variables → Actions
-#   4. Add TAURI_PRIVATE_KEY with the copied contents
-#   5. Add TAURI_KEY_PASSWORD with your key password
+#   4. Add TAURI_SIGNING_PRIVATE_KEY with the copied contents
+#   5. Add TAURI_SIGNING_KEY_PASSWORD with your key password
 #
 
 name: 'Publish Notie'
@@ -92,8 +92,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
           releaseName: 'Notie v__VERSION__'
