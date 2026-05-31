@@ -5,7 +5,7 @@ import { useToastStore } from '../../stores/toastStore';
 import { ColorPicker } from './ColorPicker';
 import { Tooltip } from '../Tooltip';
 
-export type ColumnType = 'text' | 'predefined' | 'link' | 'page link' | 'date' | 'attachment' | 'gallery';
+export type ColumnType = 'text' | 'predefined' | 'link' | 'page link' | 'date' | 'attachment' | 'gallery' | 'media';
 
 export interface PredefinedOption {
   id: string;
@@ -39,6 +39,7 @@ const COLUMN_TYPE_ICONS: Record<ColumnType, string> = {
   date: 'calendar_month',
   attachment: 'attach_file',
   gallery: 'photo_library',
+  media: 'music_note',
 };
 
 function getDefaultIconForType(type: ColumnType): string {
@@ -1504,6 +1505,7 @@ export function EditableTable() {
                 <option value="date">Date</option>
                 <option value="attachment">Attachment</option>
                 <option value="gallery">Gallery Image</option>
+                <option value="media">Media Clip</option>
               </select>
             </div>
 
@@ -1607,31 +1609,24 @@ function CellEditor({ col, value, onChange, isPrimary }: { col: TableColumn; val
   if (col.type === 'attachment') {
     const fileName = value ? value.split(/[\\/]/).pop() || value : '';
 
-    /* resolve the stored path — if it's a relative name, prefix with app data dir */
     const resolvePath = async (stored: string): Promise<string> => {
-      // If it's an absolute path (legacy or already resolved), use as-is
       if (stored.startsWith('/') || stored.includes(':/') || stored.includes(':\\') || stored.startsWith('\\')) {
         return stored;
       }
-      // Otherwise it's just a filename stored in appDataDir/attachments/
-      const { appLocalDataDir, join } = await import('@tauri-apps/api/path');
-      return join(await appLocalDataDir(), 'attachments', stored);
+      const api = window.electronAPI;
+      if (!api) return stored;
+      return api.resolveAttachmentPath(stored);
     };
 
     const handlePickFile = async () => {
       try {
-        const { open } = await import('@tauri-apps/plugin-dialog');
-        const selected = await open({
-          multiple: false,
-          title: 'Select a file',
-        });
-        if (!selected) return;
-        const srcPath = selected as string;
-
-        // Copy file into app's stable data directory via Rust command (bypasses fs plugin scope)
-        const { invoke } = await import('@tauri-apps/api/core');
-        const destName: string = await invoke('attach_file', { sourcePath: srcPath });
-        onChange(destName); // Store just the filename — will be resolved on open
+        const api = window.electronAPI;
+        if (!api) { useToastStore.getState().toast('File system not available.', 'error'); return; }
+        const selected = await api.openFileDialog({ multiple: false, title: 'Select a file' });
+        if (!selected || selected.length === 0) return;
+        const srcPath = selected[0];
+        const result = await api.attachFile(srcPath);
+        onChange(result.name);
         useToastStore.getState().toast('File attached successfully.', 'success');
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -1643,18 +1638,18 @@ function CellEditor({ col, value, onChange, isPrimary }: { col: TableColumn; val
     const handleOpenFile = async () => {
       if (!value) return;
       try {
+        const api = window.electronAPI;
+        if (!api) { useToastStore.getState().toast('File system not available.', 'error'); return; }
         const fullPath = await resolvePath(value);
-        const { invoke } = await import('@tauri-apps/api/core');
-        const fileExists: boolean = await invoke('file_exists', { path: fullPath });
-        if (!fileExists) {
+        const exists = await api.fileExists(fullPath);
+        if (!exists) {
           useToastStore.getState().toast(
             'The attached file could not be found. It may have been moved or deleted.',
             'error',
           );
           return;
         }
-        const { openPath } = await import('@tauri-apps/plugin-opener');
-        await openPath(fullPath);
+        await api.openPath(fullPath);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error('openPath error:', msg, 'path:', value);
@@ -2053,6 +2048,11 @@ function CellEditor({ col, value, onChange, isPrimary }: { col: TableColumn; val
     return <GalleryCellEditor value={value} onChange={onChange} />;
   }
 
+  /* ── media (audio/video clip) ── */
+  if (col.type === 'media') {
+    return <MediaCellEditor value={value} onChange={onChange} />;
+  }
+
   return null;
 }
 
@@ -2189,6 +2189,163 @@ function GalleryCellEditor({ value, onChange }: { value: string; onChange: (v: s
                         {item.tags && item.tags.length > 0 && (
                           <div className="text-[10px] text-on-surface-variant truncate">{item.tags.join(', ')}</div>
                         )}
+                      </div>
+                      {isSelected && (
+                        <span className="material-symbols-outlined text-[16px] text-primary shrink-0">check_circle</span>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── media (audio/video clip) cell editor (multi-select) ─── */
+function MediaCellEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { pages } = useProjectStore();
+  const mediaPages = useMemo(() => pages.filter(p => p.type === 'audio' || p.type === 'video'), [pages]);
+  const [showPicker, setShowPicker] = useState(false);
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  const mediaItems = useMemo(() => {
+    if (!selectedPageId) return [];
+    const mp = mediaPages.find(p => p.id === selectedPageId);
+    return mp && Array.isArray(mp.content) ? mp.content : [];
+  }, [selectedPageId, mediaPages]);
+
+  const selectedIds = useMemo(() => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.filter(Boolean);
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.filter(Boolean);
+    } catch {}
+    return String(value).split(',').filter(Boolean);
+  }, [value]);
+
+  interface MediaItemInfo { id: string; title: string; pageId: string; pageTitle: string; pageType: string; }
+  const selectedClips = useMemo(() => {
+    if (!value) return [];
+    const results: MediaItemInfo[] = [];
+    for (const id of selectedIds) {
+      for (const mp of mediaPages) {
+        const items: any[] = Array.isArray(mp.content) ? mp.content : [];
+        const found = items.find(item => item.id === id);
+        if (found) {
+          results.push({ id: found.id, title: found.title || 'Untitled', pageId: mp.id, pageTitle: mp.title, pageType: mp.type || '' });
+          break;
+        }
+      }
+    }
+    return results;
+  }, [value, mediaPages, selectedIds]);
+
+  const toggleClip = (itemId: string) => {
+    const ids = [...selectedIds];
+    if (ids.includes(itemId)) {
+      onChange(JSON.stringify(ids.filter(id => id !== itemId)));
+    } else {
+      onChange(JSON.stringify([...ids, itemId]));
+    }
+  };
+
+  const removeClip = (itemId: string) => {
+    onChange(JSON.stringify(selectedIds.filter(id => id !== itemId)));
+  };
+
+  useClickOutside(pickerRef, useCallback(() => { setShowPicker(false); setSelectedPageId(null); }, []));
+
+  const pageIcon = (type: string) => type === 'video' ? 'videocam' : 'mic';
+  const pageColor = (type: string) => type === 'video' ? 'text-purple-400' : 'text-cyan-400';
+  const pageBg = (type: string) => type === 'video' ? 'bg-purple-500/15' : 'bg-cyan-500/15';
+
+  return (
+    <div className="relative w-full min-h-[40px]" ref={pickerRef}>
+      <div
+        className="w-full h-full px-2 py-1 flex items-center flex-wrap gap-1 cursor-pointer hover:bg-on-surface/5 min-h-[40px]"
+        onClick={() => setShowPicker(!showPicker)}
+      >
+        {selectedClips.length > 0 ? (
+          selectedClips.map(clip => (
+            <span key={clip.id} className={`inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded font-medium group/tag ${pageBg(clip.pageType)} ${pageColor(clip.pageType)}`}>
+              <span className="material-symbols-outlined text-[12px]">{pageIcon(clip.pageType)}</span>
+              {clip.title || clip.id.slice(0, 8)}
+              <span className="opacity-0 group-hover/tag:opacity-100 transition-opacity">
+                <Tooltip label="Remove">
+                <button
+                  className="ml-0.5 hover:bg-white/10 rounded-full w-3.5 h-3.5 flex items-center justify-center"
+                  onClick={e => { e.stopPropagation(); removeClip(clip.id); }}
+                >
+                  <span className="material-symbols-outlined text-[10px]">close</span>
+                </button>
+                </Tooltip>
+              </span>
+            </span>
+          ))
+        ) : (
+          <div className="flex items-center gap-1.5 px-1 py-1">
+            <span className="material-symbols-outlined text-[16px] text-primary">music_note</span>
+            <span className="text-sm text-on-surface-variant">Pick audio/video...</span>
+          </div>
+        )}
+      </div>
+
+      {showPicker && (
+        <div className="absolute top-full left-0 mt-1 w-72 bg-surface border border-outline/20 shadow-xl rounded-lg z-50 p-2 max-h-80 overflow-y-auto" onClick={e => e.stopPropagation()}>
+          {mediaPages.length === 0 ? (
+            <div className="text-sm text-on-surface-variant text-center py-4">No audio or video pages found.</div>
+          ) : !selectedPageId ? (
+            <>
+              <div className="text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider px-1">Select a media page</div>
+              {mediaPages.map(mp => (
+                <div
+                  key={mp.id}
+                  onClick={() => setSelectedPageId(mp.id)}
+                  className="flex items-center gap-2 px-2 py-1.5 hover:bg-on-surface/10 rounded cursor-pointer text-sm"
+                >
+                  <span className={`material-symbols-outlined text-[16px] ${pageColor(mp.type || '')}`}>{pageIcon(mp.type || '')}</span>
+                  {mp.title || 'Untitled'}
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1 mb-1">
+                <button onClick={() => setSelectedPageId(null)} className="p-0.5 hover:bg-on-surface/10 rounded">
+                  <span className="material-symbols-outlined text-[14px]">arrow_back</span>
+                </button>
+                <span className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
+                  {mediaPages.find(mp => mp.id === selectedPageId)?.title || 'Media'}
+                </span>
+              </div>
+              {mediaItems.length === 0 ? (
+                <div className="text-sm text-on-surface-variant text-center py-4">No clips in this page.</div>
+              ) : (
+                mediaItems.map((item: any) => {
+                  const isSelected = selectedIds.includes(item.id);
+                  const itemType = mediaPages.find(mp => mp.id === selectedPageId)?.type;
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => toggleClip(item.id)}
+                      className={`flex items-center gap-2 px-2 py-1.5 hover:bg-on-surface/10 rounded cursor-pointer ${isSelected ? 'bg-on-surface/5' : ''}`}
+                    >
+                      <div className={`w-8 h-8 rounded flex items-center justify-center flex-shrink-0 ${itemType === 'video' ? 'bg-purple-500/20' : 'bg-cyan-500/20'}`}>
+                        <span className={`material-symbols-outlined text-[16px] ${itemType === 'video' ? 'text-purple-400' : 'text-cyan-400'}`}>
+                          {itemType === 'video' ? 'videocam' : 'mic'}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm truncate">{item.title || item.name || 'Untitled'}</div>
+                        {item.duration ? (
+                          <div className="text-[10px] text-on-surface-variant">{Math.round(item.duration)}s</div>
+                        ) : null}
                       </div>
                       {isSelected && (
                         <span className="material-symbols-outlined text-[16px] text-primary shrink-0">check_circle</span>

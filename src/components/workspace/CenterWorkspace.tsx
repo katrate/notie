@@ -108,9 +108,28 @@ export function CenterWorkspace() {
   if (!activeProject && !activePageId) {
     return (
       <div className="flex-1 flex flex-col h-full items-center justify-center bg-background">
-        <div className="text-center opacity-50">
-          <span className="material-symbols-outlined text-[64px] block mb-4">folder_open</span>
-          <p className="text-lg text-on-surface-variant">Select or create a project in the sidebar to begin.</p>
+        <div className="text-center max-w-md mx-auto px-6">
+          <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
+            <span className="material-symbols-outlined text-[48px] text-primary">note_stack</span>
+          </div>
+          <h2 className="text-2xl font-bold text-on-surface mb-2">Welcome to Notie</h2>
+          <p className="text-sm text-on-surface-variant/70 mb-8 leading-relaxed">
+            Create your first project to start organizing notes, tables, boards, and more.
+          </p>
+          <button
+            onClick={() => {
+              const store = useProjectStore.getState();
+              store.createProject('My first project');
+            }}
+            className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm font-semibold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 80%, white))', color: '#000' }}
+          >
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            Create Your First Project
+          </button>
+          <p className="mt-4 text-xs text-on-surface-variant/50">
+            or press <kbd className="px-1.5 py-0.5 rounded bg-surface-variant text-on-surface-variant text-[10px] font-mono">Ctrl+P</kbd> to open command palette
+          </p>
         </div>
       </div>
     );

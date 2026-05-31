@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-electron/
+release/
 target/
 **/.tauri/
 src-tauri/gen/
@@ -10,3 +12,4 @@ src-tauri/gen/
 *.key.pub
 debug.txt
 nul
+_check.mjs

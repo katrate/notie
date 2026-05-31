@@ -14,6 +14,7 @@ export function Hero() {
               <li><a href="#features">Features</a></li>
               <li><a href="#page-types">Page Types</a></li>
               <li><a href="#downloads">Download</a></li>
+              <li><a href="#feedback">Feedback</a></li>
               <li><a href="https://github.com/katrate/notie" target="_blank" rel="noopener noreferrer">GitHub</a></li>
               <li><a href="#downloads" className="nav-cta">Get Notie</a></li>
             </ul>

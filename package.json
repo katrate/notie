@@ -2,24 +2,19 @@
   "name": "notie",
   "private": true,
   "version": "0.1.1",
+  "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "tauri": "tauri"
+    "dist": "npm run build && electron-builder",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
     "@supabase/supabase-js": "^2.106.1",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.3.0",
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-dialog": "^2.7.1",
-    "@tauri-apps/plugin-fs": "^2.5.1",
-    "@tauri-apps/plugin-opener": "^2",
-    "@tauri-apps/plugin-process": "^2.3.1",
-    "@tauri-apps/plugin-updater": "^2.10.1",
     "@tiptap/extension-code-block-lowlight": "^3.23.6",
     "@tiptap/extension-font-family": "^3.23.6",
     "@tiptap/extension-highlight": "^3.23.6",
@@ -44,11 +39,38 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
+    "@types/node": "^22.10.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vite-plugin-electron": "^0.28.0",
+    "vite-plugin-electron-renderer": "^0.14.0"
+  },
+  "build": {
+    "appId": "com.notie.dev",
+    "productName": "Notie",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "electronDist": "node_modules/electron/dist",
+    "win": {
+      "target": [
+        "zip"
+      ],
+      "icon": "public/logo.jpg",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

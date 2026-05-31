@@ -4,10 +4,13 @@ import { useProjectStore } from '../../stores/projectStore';
 import { ReactFlow, Background, Controls, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { CustomNode } from './CustomNode';
+import { RowNode } from './RowNode';
+import { ValueNode } from './ValueNode';
+import { PageNode } from './PageNode';
 import dagre from '@dagrejs/dagre';
 import { Tooltip } from '../Tooltip';
 
-const nodeTypes = { custom: CustomNode };
+const nodeTypes = { custom: CustomNode, rowNode: RowNode, valueNode: ValueNode, pageNode: PageNode };
 
 /* Default tag definitions matching BoardView and GalleryView defaults */
 const BOARD_DEFAULT_TAGS: { name: string; color: string }[] = [
@@ -38,17 +41,25 @@ function getContrastColor(hex: string): string {
   return luminance > 0.5 ? '#000000' : '#ffffff';
 }
 
-function getNodeDimensions(id: string): { width: number; height: number } {
+function getNodeDimensions(id: string, data?: any): { width: number; height: number } {
   if (id.startsWith('proj-')) return { width: 160, height: 70 };
-  if (id.startsWith('page-')) return { width: 140, height: 65 };
-  if (id.startsWith('row-')) return { width: 120, height: 55 };
+  if (id.startsWith('page-')) {
+    const sockCount = data?.sockets?.length || 0;
+    return { width: 160, height: 50 + sockCount * 28 };
+  }
+  if (id.startsWith('row-') || id.startsWith('tasklevel-')) {
+    const colCount = data?.columns?.length || 1;
+    const rowHeight = 32;
+    return { width: 200, height: 44 + colCount * rowHeight };
+  }
   if (id.startsWith('task-')) return { width: 140, height: 52 };
-  if (id.startsWith('tasklevel-')) return { width: 100, height: 48 };
-  if (id.startsWith('img-')) return { width: 130, height: 52 };
+  if (id.startsWith('img-') || id.startsWith('vid-') || id.startsWith('aud-')) return { width: 130, height: 52 };
   if (id.startsWith('file-')) return { width: 130, height: 52 };
   if (id.startsWith('boardcard-')) return { width: 130, height: 52 };
-  if (id.startsWith('boardcol-')) return { width: 110, height: 48 };
-  return { width: 130, height: 50 }; // cells, tags
+  if (id.startsWith('boardcol-')) return { width: 120, height: 48 };
+  if (id.startsWith('cell-')) return { width: 130, height: 44 };
+  if (id.startsWith('sortval-')) return { width: 130, height: 48 };
+  return { width: 130, height: 50 };
 }
 
 /* ── Find all descendant nodes reachable via directed edges ── */
@@ -81,14 +92,14 @@ function layoutNodesWithDagre(nodes: any[], edges: any[]): any[] {
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({
     rankdir: 'TB',
-    ranksep: 120,
-    nodesep: 60,
-    marginx: 60,
-    marginy: 60,
+    ranksep: 160,
+    nodesep: 80,
+    marginx: 80,
+    marginy: 80,
   });
 
   nodes.forEach(node => {
-    const { width, height } = getNodeDimensions(node.id);
+    const { width, height } = getNodeDimensions(node.id, node.data);
     g.setNode(node.id, { width, height });
   });
 
@@ -240,7 +251,7 @@ function layoutNodesCircular(nodes: any[], edges: any[]): any[] {
 
   return nodes.map(node => {
     const d = depth.get(node.id) || 0;
-    const { width, height } = getNodeDimensions(node.id);
+    const { width, height } = getNodeDimensions(node.id, node.data);
 
     if (d === 0) {
       // Root node centered at origin
@@ -387,9 +398,38 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
       const pageTags: string[] = page.metadata?.tags || [];
       const firstTag = pageTags.length > 0 ? projectTags.find(t => t.name === pageTags[0]) : null;
 
+      const pageSockets: { id: string; label: string; count: number }[] = [];
+      if (page.type === 'table' && Array.isArray(page.content)) {
+        pageSockets.push({ id: 'rows', label: 'Rows', count: page.content.length });
+        const cols = page.metadata?.columns || [];
+        pageSockets.push({ id: 'columns', label: 'Columns', count: cols.length });
+      }
+      if (page.type === 'checklist' && Array.isArray(page.content)) {
+        pageSockets.push({ id: 'tasks', label: 'Tasks', count: page.content.length });
+      }
+      if (page.type === 'gallery' && Array.isArray(page.content)) {
+        pageSockets.push({ id: 'images', label: 'Images', count: page.content.length });
+      }
+      if (page.type === 'board' && Array.isArray(page.content)) {
+        pageSockets.push({ id: 'cards', label: 'Cards', count: page.content.length });
+      }
+      if (page.type === 'file' && Array.isArray(page.content)) {
+        pageSockets.push({ id: 'files', label: 'Files', count: page.content.length });
+      }
+      if (page.type === 'video' && Array.isArray(page.content)) {
+        pageSockets.push({ id: 'video', label: 'Clips', count: page.content.length });
+      }
+      if (page.type === 'audio' && Array.isArray(page.content)) {
+        pageSockets.push({ id: 'audio', label: 'Clips', count: page.content.length });
+      }
+      if (page.type === 'folder') {
+        const childCount = projectPages.filter(p => p.metadata?.parentId === page.id).length;
+        pageSockets.push({ id: 'pages', label: 'Pages', count: childCount });
+      }
+
       newNodes.push({
         id: `page-${page.id}`,
-        type: 'custom',
+        type: 'pageNode',
         data: { 
           label: page.title || 'Untitled', 
           icon: page.icon || defaultIcon, 
@@ -397,6 +437,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
           backgroundColor: firstTag ? firstTag.color : undefined,
           textColor: firstTag ? getContrastColor(firstTag.color) : undefined,
           pageType: page.type,
+          sockets: pageSockets,
         },
         position: { x: 0, y: 0 },
       });
@@ -424,6 +465,10 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
           buildGallerySubGraph(page, projectTags, newNodes, newEdges);
         } else if (page.type === 'file' && Array.isArray(page.content)) {
           buildFileSubGraph(page, newNodes, newEdges);
+        } else if (page.type === 'video' && Array.isArray(page.content)) {
+          buildMediaSubGraph(page, newNodes, newEdges, 'video');
+        } else if (page.type === 'audio' && Array.isArray(page.content)) {
+          buildMediaSubGraph(page, newNodes, newEdges, 'audio');
         } else if (page.type === 'board' && Array.isArray(page.content)) {
           buildBoardSubGraph(page, projectTags, newNodes, newEdges);
         } else if (page.content) {
@@ -855,16 +900,20 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
       if (rowIndex >= newContent.length) return;
       const row = { ...newContent[rowIndex] };
 
+      // Extract the column ID from sourceHandle, e.g. "col-{colId}"
+      const sourceHandle = connection.sourceHandle as string | undefined;
+      const targetColId = sourceHandle?.startsWith('col-') ? sourceHandle.slice(4) : null;
+
       let edgeSuffix: string | null = null;
 
       if (target.startsWith('file-')) {
-        // Row → file: store file reference in attachment column cell
         const fileMatch = target.match(/^file-(.+)-(.+)$/);
         if (fileMatch) {
           const fileItemId = fileMatch[2];
-          const attachmentCol = columns.find((c: any) => c.type === 'attachment');
+          const attachmentCol = targetColId
+            ? columns.find((c: any) => c.id === targetColId)
+            : columns.find((c: any) => c.type === 'attachment');
           if (attachmentCol) {
-            // Find the file item in the file page to get the stored name
             const filePageId = fileMatch[1];
             const filePage = pages.find(p => p.id === filePageId);
             const fileItem = filePage && Array.isArray(filePage.content)
@@ -879,11 +928,12 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
           }
         }
       } else if (target.startsWith('img-')) {
-        // Row → gallery image: append to gallery column cell (JSON array)
         const imgMatch = target.match(/^img-(.+)-(.+)$/);
         if (imgMatch) {
           const imageItemId = imgMatch[2];
-          const galleryCol = columns.find((c: any) => c.type === 'gallery');
+          const galleryCol = targetColId
+            ? columns.find((c: any) => c.id === targetColId)
+            : columns.find((c: any) => c.type === 'gallery');
           if (galleryCol) {
             const currentVal = row[galleryCol.id] || '';
             let ids: string[];
@@ -902,10 +952,37 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
             edgeSuffix = `img-${imageItemId}`;
           }
         }
+      } else if (target.startsWith('vid-') || target.startsWith('aud-')) {
+        const prefix = target.startsWith('vid-') ? 'vid-' : 'aud-';
+        const mediaMatch = target.match(new RegExp(`^${prefix}(.+)-(.+)$`));
+        if (mediaMatch) {
+          const mediaItemId = mediaMatch[2];
+          const mediaCol = targetColId
+            ? columns.find((c: any) => c.id === targetColId)
+            : columns.find((c: any) => c.type === 'media');
+          if (mediaCol) {
+            const currentVal = row[mediaCol.id] || '';
+            let ids: string[];
+            try {
+              const parsed = JSON.parse(currentVal || '[]');
+              ids = Array.isArray(parsed) ? parsed : [];
+            } catch {
+              ids = currentVal ? String(currentVal).split(',').filter(Boolean) : [];
+            }
+            if (!ids.includes(mediaItemId)) {
+              ids.push(mediaItemId);
+              row[mediaCol.id] = JSON.stringify(ids);
+              newContent[rowIndex] = row;
+              await updatePageContent(tablePageId, newContent);
+            }
+            edgeSuffix = `${prefix}${mediaItemId}`;
+          }
+        }
       } else if (target.startsWith('page-')) {
-        // Row → page: append to page link column cell
         const targetPageId = target.replace('page-', '');
-        const pageLinkCol = columns.find((c: any) => c.type === 'page link');
+        const pageLinkCol = targetColId
+          ? columns.find((c: any) => c.id === targetColId)
+          : columns.find((c: any) => c.type === 'page link');
         if (pageLinkCol) {
           const currentVal = row[pageLinkCol.id] || '';
           const ids = currentVal ? currentVal.split(',').filter(Boolean) : [];
@@ -954,32 +1031,35 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
       } else if (target.startsWith('cell-')) {
         // Row → cell node on another row: copy that cell's value to this row
         // cell-{36-char-pageId}-{rIndex}-{colId}-{vIdx}
-        const afterPrefix = target.slice(5); // remove 'cell-'
+        const afterPrefix = target.slice(5);
         const cellPageId = afterPrefix.slice(0, 36);
         if (cellPageId !== tablePageId) return;
-        const rest = afterPrefix.slice(37); // skip UUID + '-'
+        const rest = afterPrefix.slice(37);
         const firstDash = rest.indexOf('-');
         const targetRowIndex = parseInt(rest.slice(0, firstDash), 10);
         if (isNaN(targetRowIndex) || targetRowIndex >= newContent.length) return;
-        // Skip self-connections (dragging a row to its own cell)
         if (targetRowIndex === rowIndex) return;
         const afterRowIndex = rest.slice(firstDash + 1);
         const lastDash = afterRowIndex.lastIndexOf('-');
-        const colId = afterRowIndex.slice(0, lastDash);
+        const cellColId = afterRowIndex.slice(0, lastDash);
         const vIdx = afterRowIndex.slice(lastDash + 1);
 
-        const col = columns.find((c: any) => c.id === colId);
-        if (!col) return;
+        // Use the column from the source socket when available, otherwise from the target cell
+        const writeColId = targetColId || cellColId;
+        const readColId = cellColId;
+
+        const writeCol = columns.find((c: any) => c.id === writeColId);
+        const readCol = columns.find((c: any) => c.id === readColId);
+        if (!writeCol || !readCol) return;
 
         // Get the value from the target row's cell
         const targetRow = newContent[targetRowIndex];
-        const cellValue = targetRow[colId];
+        const cellValue = targetRow[readColId];
         if (cellValue == null || cellValue === '') return;
 
-        if (col.type === 'predefined') {
-          // Copy option IDs from target row to source row
+        if (readCol.type === 'predefined') {
           const targetValIds = String(cellValue).split(',').filter(Boolean);
-          const sourceCurrentVal = row[colId] || '';
+          const sourceCurrentVal = row[writeColId] || '';
           const sourceValIds = sourceCurrentVal ? String(sourceCurrentVal).split(',').filter(Boolean) : [];
           let modified = false;
           targetValIds.forEach((valId: string) => {
@@ -989,18 +1069,17 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
             }
           });
           if (modified) {
-            row[colId] = sourceValIds.join(',');
+            row[writeColId] = sourceValIds.join(',');
             newContent[rowIndex] = row;
             await updatePageContent(tablePageId, newContent);
           }
         } else {
-          // Non-predefined: copy value directly
-          row[colId] = cellValue;
+          row[writeColId] = cellValue;
           newContent[rowIndex] = row;
           await updatePageContent(tablePageId, newContent);
         }
 
-        edgeSuffix = `cell-${colId}-${vIdx}`;
+        edgeSuffix = `cell-${writeColId}-${vIdx}`;
       }
 
       if (edgeSuffix) {
@@ -1008,7 +1087,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
         setEdges(eds => {
           if (eds.some(e => e.id === edgeId)) return eds;
           return [...eds, {
-            id: edgeId, source, target, animated: true,
+            id: edgeId, source, sourceHandle: connection.sourceHandle, target, animated: true,
             style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
           }];
         });
@@ -1120,14 +1199,12 @@ function buildTableSubGraph(
   newEdges: any[],
 ) {
   const columns = page.metadata?.columns || [];
-  // If graphVisibleColumns is unset or empty, show all columns (default)
   const visibleCols = page.metadata?.graphVisibleColumns?.length
     ? page.metadata.graphVisibleColumns
     : columns.map((c: any) => c.id);
   const primaryCol = columns[0];
   if (!primaryCol || !Array.isArray(page.content)) return;
 
-  // Check if there are sort-by predefined columns (with backward compat for old single-column format)
   const sortByColIds: string[] = page.metadata?.sortByColIds ||
     (page.metadata?.sortByColId ? [page.metadata.sortByColId] : []);
   if (sortByColIds.length > 0) {
@@ -1138,35 +1215,61 @@ function buildTableSubGraph(
       buildTableSubGraphWithSortBy(page, columns, visibleCols, primaryCol, validCols.map((c: any) => c.id), projectPages, newNodes, newEdges);
       return;
     }
-    // Fall through to default mode if all sort-by columns are invalid/missing
   }
 
-  // ── Default mode (no sort-by) ──
   page.content.forEach((row: any, rIndex: number) => {
     const rowLabel = row[primaryCol.id] || `Row ${rIndex + 1}`;
     if (!rowLabel) return;
 
     const rowId = `row-${page.id}-${rIndex}`;
 
+    const colSockets = columns
+      .filter((col: any) => visibleCols.includes(col.id))
+      .map((col: any) => {
+        const rawVal = row[col.id];
+        const displayVal = rawVal != null ? String(rawVal).substring(0, 20) : '';
+        let color: string | undefined;
+        if (col.type === 'predefined' && rawVal) {
+          const valIds = String(rawVal).split(',').filter(Boolean);
+          const firstOpt = valIds.length > 0
+            ? col.options?.find((o: any) => o.id === valIds[0])
+            : null;
+          if (firstOpt?.color) color = firstOpt.color;
+        }
+        return {
+          colId: col.id,
+          colName: col.name || col.id,
+          value: displayVal,
+          type: col.type || 'text',
+          color,
+        };
+      });
+
     newNodes.push({
       id: rowId,
-      type: 'custom',
-      data: { label: String(rowLabel).substring(0, 30), icon: 'Database', color: 'bg-surface-variant text-on-surface-variant' },
-      position: { x: 0, y: 0 }, // dagre will set
+      type: 'rowNode',
+      data: {
+        label: String(rowLabel).substring(0, 30),
+        icon: 'Database',
+        color: 'bg-surface-variant text-on-surface-variant',
+        columns: colSockets,
+        pageId: page.id,
+        rowIndex: rIndex,
+      },
+      position: { x: 0, y: 0 },
     });
 
     newEdges.push({
       id: `edge-row-${page.id}-${rIndex}`,
       source: `page-${page.id}`,
       target: rowId,
+      sourceHandle: undefined,
       animated: true,
       style: { stroke: 'rgba(152, 203, 255, 0.4)', strokeWidth: 2 },
     });
 
     addRowCellNodes(page, row, rIndex, columns, visibleCols, primaryCol, rowId, projectPages, newNodes, newEdges);
   });
-
-  // ── No standalone palette nodes — cell value nodes under each row serve as drag targets ──
 }
 
 /** Add cell nodes for a given row (used by both default and sort-by modes) */
@@ -1189,16 +1292,21 @@ function addRowCellNodes(
 
     let valueIds: string[];
     if (col.type === 'gallery') {
-      // Gallery values stored as JSON array
       try {
         const parsed = JSON.parse(String(rawCellValue));
         valueIds = Array.isArray(parsed) ? parsed.filter(Boolean) : [String(rawCellValue)];
       } catch {
-        // Fallback to comma-separated (legacy)
         valueIds = String(rawCellValue).split(',').filter(Boolean);
       }
     } else if (col.type === 'predefined' || col.type === 'page link') {
       valueIds = String(rawCellValue).split(',').filter(Boolean);
+    } else if (col.type === 'media') {
+      try {
+        const parsed = JSON.parse(String(rawCellValue));
+        valueIds = Array.isArray(parsed) ? parsed.filter(Boolean) : [String(rawCellValue)];
+      } catch {
+        valueIds = String(rawCellValue).split(',').filter(Boolean);
+      }
     } else {
       valueIds = [String(rawCellValue)];
     }
@@ -1213,6 +1321,7 @@ function addRowCellNodes(
             newEdges.push({
               id: refEdgeId,
               source: parentNodeId,
+              sourceHandle: `col-${col.id}`,
               target: `page-${singleVal}`,
               animated: true,
               style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
@@ -1222,13 +1331,10 @@ function addRowCellNodes(
         return;
       }
 
-      // Attachment column: skip auto-sub-graph here (stored filenames don't match file node IDs).
-      // Row→file drag connections are handled by the onConnect handler.
       if (col.type === 'attachment') {
         return;
       }
 
-      // Gallery column: draw amber edge from row to the image node — no separate cell node
       if (col.type === 'gallery') {
         const galleryPage = projectPages.find(p =>
           p.type === 'gallery' && Array.isArray(p.content) && p.content.some((item: any) => item.id === singleVal)
@@ -1241,7 +1347,31 @@ function addRowCellNodes(
             newEdges.push({
               id: refEdgeId,
               source: parentNodeId,
+              sourceHandle: `col-${col.id}`,
               target: imgNodeId,
+              animated: true,
+              style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
+            });
+          }
+        }
+        return;
+      }
+
+      if (col.type === 'media') {
+        const mediaPage = projectPages.find(p =>
+          (p.type === 'audio' || p.type === 'video') && Array.isArray(p.content) && p.content.some((item: any) => item.id === singleVal)
+        );
+        if (mediaPage) {
+          const prefix = mediaPage.type === 'video' ? 'vid' : 'aud';
+          const mediaNodeId = `${prefix}-${mediaPage.id}-${singleVal}`;
+          const refEdgeId = `edge-table-media-${parentNodeId}-${singleVal}`;
+          const alreadyExists = newEdges.some(e => e.id === refEdgeId);
+          if (!alreadyExists) {
+            newEdges.push({
+              id: refEdgeId,
+              source: parentNodeId,
+              sourceHandle: `col-${col.id}`,
+              target: mediaNodeId,
               animated: true,
               style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
             });
@@ -1265,9 +1395,10 @@ function addRowCellNodes(
 
       const cellId = `cell-${page.id}-${rIndex}-${col.id}-${vIdx}`;
 
-      const nodeData: any = { 
-        label: String(cellLabel).substring(0, 20), 
+      const nodeData: any = {
+        label: String(cellLabel).substring(0, 20),
         icon: col.icon || 'Label',
+        colType: col.type,
       };
       if (bgColor) {
         nodeData.backgroundColor = bgColor;
@@ -1278,13 +1409,16 @@ function addRowCellNodes(
 
       newNodes.push({
         id: cellId,
-        type: 'custom',
+        type: 'valueNode',
         data: nodeData,
-        position: { x: 0, y: 0 }, // dagre will set
+        position: { x: 0, y: 0 },
       });
       newEdges.push({
         id: `edge-cell-${page.id}-${rIndex}-${col.id}-${vIdx}`,
-        source: parentNodeId, target: cellId, animated: true,
+        source: parentNodeId,
+        sourceHandle: `col-${col.id}`,
+        target: cellId,
+        animated: true,
         style: { stroke: 'rgba(152, 203, 255, 0.4)', strokeWidth: 2 },
       });
     });
@@ -1330,10 +1464,23 @@ function buildTableSubGraphWithSortBy(
     const allEmpty = levelsValues.every(lv => lv.valIds.length === 0);
     if (allEmpty) {
       const rowId = `row-${page.id}-${rIndex}`;
+      const colSockets = columns
+        .filter((col: any) => visibleCols.includes(col.id))
+        .map((col: any) => {
+          const rawVal = row[col.id];
+          const displayVal = rawVal != null ? String(rawVal).substring(0, 20) : '';
+          let color: string | undefined;
+          if (col.type === 'predefined' && rawVal) {
+            const valIds = String(rawVal).split(',').filter(Boolean);
+            const firstOpt = valIds.length > 0 ? col.options?.find((o: any) => o.id === valIds[0]) : null;
+            if (firstOpt?.color) color = firstOpt.color;
+          }
+          return { colId: col.id, colName: col.name || col.id, value: displayVal, type: col.type || 'text', color };
+        });
       newNodes.push({
         id: rowId,
-        type: 'custom',
-        data: { label: String(rowLabel).substring(0, 30), icon: 'Database', color: 'bg-surface-variant text-on-surface-variant' },
+        type: 'rowNode',
+        data: { label: String(rowLabel).substring(0, 30), icon: 'Database', color: 'bg-surface-variant text-on-surface-variant', columns: colSockets, pageId: page.id, rowIndex: rIndex },
         position: { x: 0, y: 0 },
       });
       newEdges.push({
@@ -1396,9 +1543,9 @@ function buildTableSubGraphWithSortBy(
           const sortCol = columns.find((c: any) => c.id === colId);
           newNodes.push({
             id: nodeId,
-            type: 'custom',
+            type: 'valueNode',
             data: {
-              label: String(sortValueLabel).substring(0, 25),
+              label: String(sortValueLabel).substring(0, 20),
               icon: sortCol?.icon || 'Label',
               backgroundColor: sortColor,
               textColor: getContrastColor(sortColor),
@@ -1422,10 +1569,23 @@ function buildTableSubGraphWithSortBy(
       const rowId = `row-${page.id}-${rIndex}`;
       const rowAlreadyExists = newNodes.some(n => n.id === rowId);
       if (!rowAlreadyExists) {
+        const colSockets = columns
+          .filter((col: any) => visibleCols.includes(col.id))
+          .map((col: any) => {
+            const rawVal = row[col.id];
+            const displayVal = rawVal != null ? String(rawVal).substring(0, 20) : '';
+            let color: string | undefined;
+            if (col.type === 'predefined' && rawVal) {
+              const valIds = String(rawVal).split(',').filter(Boolean);
+              const firstOpt = valIds.length > 0 ? col.options?.find((o: any) => o.id === valIds[0]) : null;
+              if (firstOpt?.color) color = firstOpt.color;
+            }
+            return { colId: col.id, colName: col.name || col.id, value: displayVal, type: col.type || 'text', color };
+          });
         newNodes.push({
           id: rowId,
-          type: 'custom',
-          data: { label: String(rowLabel).substring(0, 30), icon: 'Database', color: 'bg-surface-variant text-on-surface-variant' },
+          type: 'rowNode',
+          data: { label: String(rowLabel).substring(0, 30), icon: 'Database', color: 'bg-surface-variant text-on-surface-variant', columns: colSockets, pageId: page.id, rowIndex: rIndex },
           position: { x: 0, y: 0 },
         });
       }
@@ -1490,13 +1650,13 @@ function buildTextSubGraph(
 
     newNodes.push({
       id: `tag-${page.id}-${tag}`,
-      type: 'custom',
+      type: 'valueNode',
       data: {
         label: tag,
         icon: 'Hash',
         ...(tagDef?.color
           ? { backgroundColor: tagDef.color, textColor: getContrastColor(tagDef.color) }
-          : { color: 'bg-tertiary/20 text-tertiary' }),
+          : { backgroundColor: '#a855f7', textColor: '#fff' }),
       },
       position: { x: 0, y: 0 }, // dagre will set
     });
@@ -1524,53 +1684,24 @@ function buildChecklistSubGraph(
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
-  const priorityColors = ['', 'bg-red-500/20 text-red-400', 'bg-orange-500/20 text-orange-400', 'bg-amber-500/20 text-amber-400', 'bg-emerald-500/20 text-emerald-400', 'bg-sky-500/20 text-sky-400'];
   const priorityIcons = ['', 'priority_high', 'warning', 'arrow_upward', 'check', 'more_horiz'];
 
-  function getTaskSubLabel(todo: any): string {
-    const p = todo.priority || 3;
-    if (todo.completed) return 'Done';
-    if (todo.dueDate) {
-      const due = new Date(todo.dueDate);
-      const isJustDate = due.getHours() === 0 && due.getMinutes() === 0 && due.getSeconds() === 0 && due.getMilliseconds() === 0;
-      const dateStr = isJustDate
-        ? due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-        : due.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-      if (due >= todayStart && due <= todayEnd) return `P${p} · Due today`;
-      return `P${p} · ${dateStr}`;
-    }
-    return `P${p}`;
-  }
-
-  function getTaskColor(todo: any): string {
-    const p = todo.priority || 3;
-    if (todo.completed) return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
-    if (todo.dueDate) {
-      const due = new Date(todo.dueDate);
-      if (due >= todayStart && due <= todayEnd) return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
-    }
-    return priorityColors[p];
-  }
-
-  function getTaskIcon(todo: any): string {
-    if (todo.completed) return 'check_circle';
-    if (todo.dueDate) {
-      const due = new Date(todo.dueDate);
-      if (due >= todayStart && due <= todayEnd) return 'schedule';
-    }
-    return 'radio_button_unchecked';
-  }
-
-  function pushTaskNode(todo: any, parentId: string) {
+  function pushTaskNode(todo: any, parentId: string, sourceHandle?: string, hidePriority?: boolean) {
     if (!todo || !todo.id) return;
+    const taskSockets = [
+      { colId: 'text', colName: 'Task', value: todo.text?.substring(0, 25) || '', type: 'text' },
+      ...(hidePriority ? [] : [{ colId: 'priority', colName: 'Priority', value: `P${todo.priority || 3}`, type: 'predefined', color: ['', '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4'][todo.priority || 3] }]),
+      { colId: 'dueDate', colName: 'Due', value: todo.dueDate ? new Date(todo.dueDate).toLocaleDateString() : '', type: 'date' },
+      { colId: 'status', colName: 'Status', value: todo.completed ? 'Done' : 'Open', type: 'text' },
+    ];
     newNodes.push({
       id: `task-${page.id}-${todo.id}`,
-      type: 'custom',
+      type: 'rowNode',
       data: {
-        label: todo.text?.substring(0, 30) || 'Untitled',
-        icon: getTaskIcon(todo),
-        color: getTaskColor(todo),
-        subLabel: getTaskSubLabel(todo),
+        label: todo.text?.substring(0, 22) || 'Untitled',
+        icon: todo.completed ? 'check_circle' : 'radio_button_unchecked',
+        color: '',
+        columns: taskSockets,
         pageType: 'task',
       },
       position: { x: 0, y: 0 },
@@ -1578,6 +1709,7 @@ function buildChecklistSubGraph(
     newEdges.push({
       id: `edge-task-${page.id}-${todo.id}`,
       source: parentId,
+      sourceHandle: sourceHandle || undefined,
       target: `task-${page.id}-${todo.id}`,
       animated: true,
       style: { stroke: 'rgba(168, 85, 247, 0.5)', strokeWidth: 2 },
@@ -1608,13 +1740,19 @@ function buildChecklistSubGraph(
       if (!createdLevels.has(p)) {
         createdLevels.add(p);
         const levelId = `tasklevel-${page.id}-p${p}`;
+        const levelColor = ['#000', '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4'][p];
         newNodes.push({
           id: levelId,
-          type: 'custom',
+          type: 'rowNode',
           data: {
             label: `P${p}`,
             icon: priorityIcons[p],
-            color: priorityColors[p].replace('/20 ', '/30 '),
+            color: '',
+            columns: [
+              { colId: 'tasks', colName: 'Tasks', value: `${sortedTodos.filter((t: any) => (t.priority || 3) === p).length} items`, type: 'text', color: levelColor },
+            ],
+            backgroundColor: levelColor,
+            textColor: '#fff',
             pageType: 'priority',
           },
           position: { x: 0, y: 0 },
@@ -1627,7 +1765,7 @@ function buildChecklistSubGraph(
           style: { stroke: 'rgba(168, 85, 247, 0.5)', strokeWidth: 2, strokeDasharray: '4,3' },
         });
       }
-      pushTaskNode(todo, `tasklevel-${page.id}-p${p}`);
+      pushTaskNode(todo, `tasklevel-${page.id}-p${p}`, 'col-tasks', true);
     });
   } else {
     // Flat mode (default / dueDate)
@@ -1660,7 +1798,6 @@ function buildGallerySubGraph(
     const sortedTags = Array.from(allUniqueTags).sort();
     const allTagNames = [...sortedTags, ...(hasUntagged ? ['__untagged__'] : [])];
 
-    // Create tag-group nodes for each unique tag
     allTagNames.forEach((tag) => {
       const groupId = `taggroup-${page.id}-${tag}`;
       const isUntagged = tag === '__untagged__';
@@ -1669,7 +1806,7 @@ function buildGallerySubGraph(
       const tagBg = tagDef?.color || '#a855f7';
       newNodes.push({
         id: groupId,
-        type: 'custom',
+        type: 'valueNode',
         data: {
           label: isUntagged ? 'Untagged' : `#${tag}`,
           icon: 'Hash',
@@ -1698,12 +1835,12 @@ function buildGallerySubGraph(
 
       newNodes.push({
         id: nodeId,
-        type: 'custom',
+        type: 'valueNode',
         data: {
-          label: item.title.substring(0, 24),
+          label: item.title.substring(0, 20),
           icon: isVideo ? 'videocam' : 'image',
-          color: isVideo ? 'bg-purple-500/15 text-purple-400 border-purple-500/20' : 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20',
-          subLabel: item.tags?.length ? item.tags.slice(0, 2).join(', ') : (isVideo ? 'video' : undefined),
+          backgroundColor: isVideo ? '#a855f7' : '#06b6d4',
+          textColor: '#fff',
           imgUrl: item.url,
         },
         position: { x: 0, y: 0 },
@@ -1717,6 +1854,7 @@ function buildGallerySubGraph(
               id: `edge-img-${page.id}-${item.id}-${tag}`,
               source: `taggroup-${page.id}-${tag}`,
               target: nodeId,
+              sourceHandle: `img-${item.id}`,
               animated: true,
               style: { stroke: 'rgba(6, 182, 212, 0.5)', strokeWidth: 2 },
             });
@@ -1727,6 +1865,7 @@ function buildGallerySubGraph(
           id: `edge-img-${page.id}-${item.id}-__untagged__`,
           source: `taggroup-${page.id}-__untagged__`,
           target: nodeId,
+          sourceHandle: `img-${item.id}`,
           animated: true,
           style: { stroke: 'rgba(6, 182, 212, 0.5)', strokeWidth: 2 },
         });
@@ -1742,12 +1881,12 @@ function buildGallerySubGraph(
     const nodeId = `img-${page.id}-${item.id}`;
     newNodes.push({
       id: nodeId,
-      type: 'custom',
+      type: 'valueNode',
       data: {
-        label: item.title.substring(0, 24),
+        label: item.title.substring(0, 20),
         icon: isVideo ? 'videocam' : 'image',
-        color: isVideo ? 'bg-purple-500/15 text-purple-400 border-purple-500/20' : 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20',
-        subLabel: item.tags?.length ? item.tags.slice(0, 2).join(', ') : (isVideo ? 'video' : undefined),
+        backgroundColor: isVideo ? '#a855f7' : '#06b6d4',
+        textColor: '#fff',
         imgUrl: item.url,
       },
       position: { x: 0, y: 0 },
@@ -1793,7 +1932,7 @@ function buildBoardSubGraph(
       const tagBg = tagDef?.color || '#a855f7';
       newNodes.push({
         id: groupId,
-        type: 'custom',
+        type: 'valueNode',
         data: {
           label: isUntagged ? 'Untagged' : `#${tag}`,
           icon: 'Hash',
@@ -1821,12 +1960,12 @@ function buildBoardSubGraph(
 
       newNodes.push({
         id: cardNodeId,
-        type: 'custom',
+        type: 'valueNode',
         data: {
-          label: card.title.substring(0, 24),
+          label: card.title.substring(0, 20),
           icon: 'sticky_note_2',
-          color: 'bg-violet-500/15 text-violet-400 border-violet-500/20',
-          subLabel: card.tags?.length ? card.tags.slice(0, 2).join(', ') : undefined,
+          backgroundColor: '#a78bfa',
+          textColor: '#fff',
         },
         position: { x: 0, y: 0 },
       });
@@ -1839,6 +1978,7 @@ function buildBoardSubGraph(
               id: `edge-boardcard-${page.id}-${card.id}-${tag}`,
               source: `boardtag-${page.id}-${tag}`,
               target: cardNodeId,
+              sourceHandle: `card-${card.id}`,
               animated: true,
               style: { stroke: 'rgba(139, 92, 246, 0.5)', strokeWidth: 2 },
             });
@@ -1849,6 +1989,7 @@ function buildBoardSubGraph(
           id: `edge-boardcard-${page.id}-${card.id}-__untagged__`,
           source: `boardtag-${page.id}-__untagged__`,
           target: cardNodeId,
+          sourceHandle: `card-${card.id}`,
           animated: true,
           style: { stroke: 'rgba(139, 92, 246, 0.5)', strokeWidth: 2 },
         });
@@ -1871,12 +2012,13 @@ function buildBoardSubGraph(
       const colBg = colDef.color || '#f59e0b';
       newNodes.push({
         id: colNodeId,
-        type: 'custom',
+        type: 'valueNode',
         data: {
           label: colDef.title.substring(0, 20),
           icon: 'view_column',
           backgroundColor: colBg,
           textColor: getContrastColor(colBg),
+          showRightHandle: true,
         },
         position: { x: 0, y: 0 },
       });
@@ -1893,19 +2035,19 @@ function buildBoardSubGraph(
     const cardBg = colDef?.color || '#a78bfa';
     newNodes.push({
       id: cardNodeId,
-      type: 'custom',
+      type: 'valueNode',
       data: {
-        label: card.title.substring(0, 24),
+        label: card.title.substring(0, 20),
         icon: 'sticky_note_2',
         backgroundColor: cardBg,
         textColor: getContrastColor(cardBg),
-        subLabel: card.tags?.length ? card.tags.slice(0, 2).join(', ') : undefined,
       },
       position: { x: 0, y: 0 },
     });
     newEdges.push({
       id: `edge-boardcard-${page.id}-${card.id}`,
       source: colDef ? colNodeId : `page-${page.id}`,
+      sourceHandle: colDef ? 'right' : undefined,
       target: cardNodeId,
       animated: true,
       style: { stroke: 'rgba(139, 92, 246, 0.5)', strokeWidth: 2 },
@@ -1939,11 +2081,12 @@ function buildFileSubGraph(
     const nodeId = `file-${page.id}-${item.id}`;
     newNodes.push({
       id: nodeId,
-      type: 'custom',
+      type: 'valueNode',
       data: {
-        label: item.originalName.substring(0, 24),
+        label: item.originalName.substring(0, 18),
         icon,
-        color: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
+        backgroundColor: '#f59e0b',
+        textColor: '#fff',
       },
       position: { x: 0, y: 0 },
     });
@@ -1953,6 +2096,44 @@ function buildFileSubGraph(
       target: nodeId,
       animated: true,
       style: { stroke: 'rgba(245, 158, 11, 0.5)', strokeWidth: 2 },
+    });
+  });
+}
+
+/* ── Media sub-graph: render each audio/video recording as a node ── */
+function buildMediaSubGraph(
+  page: any,
+  newNodes: any[],
+  newEdges: any[],
+  mediaType: 'audio' | 'video',
+) {
+  const items: any[] = page.content || [];
+  const isVideo = mediaType === 'video';
+  const bgColor = isVideo ? '#a855f7' : '#06b6d4';
+  const edgeColor = isVideo ? 'rgba(168, 85, 247, 0.5)' : 'rgba(6, 182, 212, 0.5)';
+  const icon = isVideo ? 'videocam' : 'mic';
+
+  items.forEach((item: any) => {
+    if (!item.id) return;
+    const label = item.title || item.name || `${mediaType} ${new Date(item.created_at || Date.now()).toLocaleString()}`;
+    const nodeId = `${mediaType === 'video' ? 'vid' : 'aud'}-${page.id}-${item.id}`;
+    newNodes.push({
+      id: nodeId,
+      type: 'valueNode',
+      data: {
+        label: label.substring(0, 22),
+        icon,
+        backgroundColor: bgColor,
+        textColor: '#fff',
+      },
+      position: { x: 0, y: 0 },
+    });
+    newEdges.push({
+      id: `edge-${mediaType}-${page.id}-${item.id}`,
+      source: `page-${page.id}`,
+      target: nodeId,
+      animated: true,
+      style: { stroke: edgeColor, strokeWidth: 2 },
     });
   });
 }

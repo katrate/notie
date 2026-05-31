@@ -121,25 +121,21 @@ export function FileView() {
     if (stored.startsWith('/') || stored.includes(':/') || stored.includes(':\\') || stored.startsWith('\\\\')) {
       return stored
     }
-    const { appLocalDataDir, join } = await import('@tauri-apps/api/path')
-    return join(await appLocalDataDir(), 'attachments', stored)
+    const api = window.electronAPI
+    if (!api) return stored
+    return api.resolveAttachmentPath(stored)
   }
 
   const handleAddFiles = async () => {
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog')
-      const selected = await open({
-        multiple: true,
-        title: 'Select files',
-      })
-      if (!selected || (selected as string[]).length === 0) return
-      const srcPaths = selected as string[]
-
-      const { invoke } = await import('@tauri-apps/api/core')
+      const api = window.electronAPI
+      if (!api) { useToastStore.getState().toast('File system not available.', 'error'); return }
+      const selected = await api.openFileDialog({ multiple: true, title: 'Select files' })
+      if (!selected || selected.length === 0) return
 
       const newFiles: FileItem[] = []
-      for (const srcPath of srcPaths) {
-        const result: { name: string; size: number } = await invoke('attach_file', { sourcePath: srcPath })
+      for (const srcPath of selected) {
+        const result = await api.attachFile(srcPath)
         const origName = srcPath.split(/[\\/]/).pop() || result.name
         newFiles.push({
           id: `file_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -164,9 +160,10 @@ export function FileView() {
 
   const handleOpenFile = async (file: FileItem) => {
     try {
+      const api = window.electronAPI
+      if (!api) { useToastStore.getState().toast('File system not available.', 'error'); return }
       const fullPath = await resolvePath(file.name)
-      const { invoke } = await import('@tauri-apps/api/core')
-      const fileExists: boolean = await invoke('file_exists', { path: fullPath })
+      const fileExists = await api.fileExists(fullPath)
       if (!fileExists) {
         useToastStore.getState().toast(
           `File "${file.originalName}" not found. It may have been moved or deleted.`,
@@ -174,8 +171,7 @@ export function FileView() {
         )
         return
       }
-      const { openPath } = await import('@tauri-apps/plugin-opener')
-      await openPath(fullPath)
+      await api.openPath(fullPath)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('openPath error:', msg, 'file:', file.name)
