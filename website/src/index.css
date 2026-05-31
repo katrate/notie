@@ -69,17 +69,11 @@ nav {
   text-decoration: none;
 }
 
-.nav-logo-icon {
+.nav-logo-img {
   width: 28px;
   height: 28px;
-  background: var(--primary);
   border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #000;
-  font-size: 14px;
-  font-weight: 800;
+  object-fit: contain;
 }
 
 .nav-links {

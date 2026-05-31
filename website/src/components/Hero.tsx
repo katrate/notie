@@ -7,7 +7,7 @@ export function Hero() {
         <div className="container">
           <div className="nav-inner">
             <a href="#" className="nav-logo">
-              <div className="nav-logo-icon">N</div>
+              <img src="/logo.png" alt="Notie" className="nav-logo-img" />
               Notie
             </a>
             <ul className="nav-links">
