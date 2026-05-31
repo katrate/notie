@@ -1,5 +1,3 @@
-import { Downloads } from "./Downloads";
-
 export function Hero() {
   return (
     <>
@@ -51,6 +49,34 @@ export function Hero() {
               View on GitHub
             </a>
           </div>
+        </div>
+
+        {/* App Screenshot Mockup */}
+        <div className="hero-showcase">
+          <div className="showcase-frame">
+            <div className="showcase-window">
+              <div className="window-dots">
+                <span className="dot dot-red"></span>
+                <span className="dot dot-yellow"></span>
+                <span className="dot dot-green"></span>
+              </div>
+              <div className="window-content">
+                <img
+                  src="/screenshots/main-workspace.png"
+                  alt="Notie workspace"
+                  className="showcase-img"
+                  loading="eager"
+                />
+              </div>
+            </div>
+            <div className="showcase-glow"></div>
+          </div>
+        </div>
+
+        <div className="scroll-indicator">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M12 5v14M5 12l7 7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
         </div>
       </section>
     </>

@@ -222,6 +222,7 @@ export function AuthScreen() {
               </button>
             </p>
           </div>
+
         </div>
 
         <div className="mt-8 flex justify-center items-center gap-6 opacity-40 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-500">
