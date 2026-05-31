@@ -26,7 +26,7 @@ export function Hero() {
         <div className="hero-bg" />
         <div className="container" style={{ position: "relative", zIndex: 1 }}>
           <div className="hero-badge">
-            <span>✦</span> v0.1.1 — Now Available
+            <span>✦</span> {__APP_VERSION__} — Now Available
           </div>
           <h1>
             Your knowledge,<br />
