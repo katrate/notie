@@ -9,7 +9,7 @@ const DOWNLOADS = {
     label: "Windows",
     icon: PLATFORM_ICONS.windows,
     files: [
-      { name: "Portable (.zip)", url: "https://github.com/katrate/notie/releases/latest/download/Notie-0.1.1-win.zip" },
+      { name: "Portable (.zip)", url: "https://github.com/katrate/notie/releases/download/v0.1.1/Notie-0.1.1-win.zip" },
     ],
   },
   macos: {
