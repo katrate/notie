@@ -27,6 +27,7 @@
     "@tiptap/starter-kit": "^3.23.6",
     "@xyflow/react": "^12.10.2",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.3",
     "lucide-react": "^1.16.0",
     "minisearch": "^7.2.0",
     "motion": "^12.40.0",
@@ -53,6 +54,11 @@
   "build": {
     "appId": "com.notie.dev",
     "productName": "Notie",
+    "publish": {
+      "provider": "github",
+      "owner": "katrate",
+      "repo": "notie"
+    },
     "directories": {
       "output": "release"
     },

@@ -10,6 +10,7 @@ import { DeleteConfirmModal } from './DeleteConfirmModal'
 import { Tooltip } from '../Tooltip'
 import { useShortcutStore } from '../../stores/shortcutStore'
 import { SettingsModal } from '../settings/SettingsModal'
+import { UpdateBanner } from '../UpdateBanner'
 
 
 function countTemplateNodes(node: TemplateNode): number {
@@ -1607,6 +1608,9 @@ export function Sidebar() {
           </button>
         </Tooltip>
       </div>
+
+      {/* Update Banner */}
+      <UpdateBanner />
 
       {/* ════ Multi-select Action Bar ════ */}
       {selectedPageIds.size > 0 && (

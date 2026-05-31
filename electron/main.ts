@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync, copyFileSync, mkdirSync, statSync } from 'fs'
+import { autoUpdater } from 'electron-updater'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -29,7 +30,50 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow)
+/* ── Auto Updater ── */
+
+const isDev = !!process.env.VITE_DEV_SERVER_URL
+
+if (!isDev) {
+  autoUpdater.autoDownload = false
+
+  autoUpdater.on('checking-for-update', () => {
+    mainWindow?.webContents.send('update:checking')
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    mainWindow?.webContents.send('update:available', info)
+  })
+
+  autoUpdater.on('update-not-available', (info) => {
+    mainWindow?.webContents.send('update:not-available', info)
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('update:download-progress', progress)
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    mainWindow?.webContents.send('update:downloaded', info)
+  })
+
+  autoUpdater.on('error', (err) => {
+    mainWindow?.webContents.send('update:error', err?.message || 'Unknown error')
+  })
+}
+
+app.whenReady().then(() => {
+  createWindow()
+
+  // Check for updates shortly after startup (only in production)
+  if (!isDev) {
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(() => {
+        // Silently ignore network errors during startup check
+      })
+    }, 5000)
+  }
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
@@ -40,6 +84,37 @@ app.on('activate', () => {
 })
 
 /* ── IPC Handlers ── */
+
+ipcMain.handle('update:check', async () => {
+  if (isDev) return { error: 'Cannot check for updates in development mode' }
+  try {
+    const result = await autoUpdater.checkForUpdates()
+    return { result }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to check for updates' }
+  }
+})
+
+ipcMain.handle('update:download', async () => {
+  if (isDev) return { error: 'Cannot download updates in development mode' }
+  try {
+    autoUpdater.downloadUpdate()
+    return { success: true }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to start download' }
+  }
+})
+
+ipcMain.handle('update:install', async () => {
+  autoUpdater.quitAndInstall()
+  return { success: true }
+})
+
+ipcMain.handle('update:getVersion', async () => {
+  return app.getVersion()
+})
+
+/* ── Other IPC Handlers ── */
 
 ipcMain.handle('dialog:openFile', async (_event, options: { multiple?: boolean; title?: string }) => {
   const result = await dialog.showOpenDialog({

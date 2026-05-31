@@ -17,7 +17,7 @@ import {
   type BackgroundColor,
 } from '../../stores/themeStore'
 
-type Tab = 'account' | 'appearance' | 'shortcuts' | 'templates'
+type Tab = 'account' | 'appearance' | 'shortcuts' | 'templates' | 'updates'
 type BGOption = { id: string; label: string; isSolid: boolean }
 
 function getGradientCSS(id: string, theme: ThemeMode): string {
@@ -116,6 +116,7 @@ function SettingsModalContent({ onClose }: { onClose: () => void }) {
             <Tooltip label="Appearance settings" position="right"><TabSidebarButton label="Appearance" icon="palette" active={activeTab === 'appearance'} onClick={() => setActiveTab('appearance')} /></Tooltip>
             <Tooltip label="Keyboard shortcuts" position="right"><TabSidebarButton label="Shortcuts" icon="keyboard" active={activeTab === 'shortcuts'} onClick={() => setActiveTab('shortcuts')} /></Tooltip>
             <Tooltip label="Manage templates" position="right"><TabSidebarButton label="Templates" icon="bookmark" active={activeTab === 'templates'} onClick={() => setActiveTab('templates')} /></Tooltip>
+            <Tooltip label="Updates" position="right"><TabSidebarButton label="Updates" icon="system_update" active={activeTab === 'updates'} onClick={() => setActiveTab('updates')} /></Tooltip>
           </div>
 
           {/* Content */}
@@ -211,6 +212,10 @@ function SettingsModalContent({ onClose }: { onClose: () => void }) {
 
           {activeTab === 'templates' && (
             <TemplateManagerTab />
+          )}
+
+          {activeTab === 'updates' && (
+            <UpdatesTabContent />
           )}
 
           {activeTab === 'appearance' && (
@@ -370,6 +375,184 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   return createPortal(
     <SettingsModalContent onClose={onClose} />,
     document.body
+  )
+}
+
+function UpdatesTabContent() {
+  const [currentVersion, setCurrentVersion] = useState('')
+  const [status, setStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error'>('idle')
+  const [updateInfo, setUpdateInfo] = useState<{ version: string } | null>(null)
+  const [downloadProgress, setDownloadProgress] = useState(0)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  // Check if running in Electron
+  const isElectron = !!window.electronAPI
+
+  useEffect(() => {
+    if (!isElectron) return
+    window.electronAPI!.getAppVersion().then(setCurrentVersion)
+  }, [isElectron])
+
+  useEffect(() => {
+    if (!isElectron) return
+    const api = window.electronAPI!
+    const cleanupFns: (() => void)[] = []
+
+    cleanupFns.push(api.onUpdateChecking(() => { setStatus('checking'); setErrorMsg(null) }))
+    cleanupFns.push(api.onUpdateAvailable((info) => { setStatus('available'); setUpdateInfo(info); setErrorMsg(null) }))
+    cleanupFns.push(api.onUpdateNotAvailable(() => { setStatus('not-available') }))
+    cleanupFns.push(api.onUpdateDownloadProgress((p) => { setStatus('downloading'); setDownloadProgress(Math.round(p.percent)) }))
+    cleanupFns.push(api.onUpdateDownloaded((info) => { setStatus('downloaded'); setUpdateInfo(info); setDownloadProgress(100) }))
+    cleanupFns.push(api.onUpdateError((err) => { setStatus('error'); setErrorMsg(err) }))
+
+    return () => cleanupFns.forEach(fn => fn())
+  }, [isElectron])
+
+  const handleCheck = async () => {
+    if (!isElectron) return
+    setStatus('checking'); setErrorMsg(null)
+    const result = await window.electronAPI!.checkForUpdates()
+    if (result.error) { setStatus('error'); setErrorMsg(result.error) }
+  }
+
+  const handleDownload = async () => {
+    if (!isElectron) return
+    setStatus('downloading'); setDownloadProgress(0)
+    const result = await window.electronAPI!.downloadUpdate()
+    if (result.error) { setStatus('error'); setErrorMsg(result.error) }
+  }
+
+  const handleInstall = async () => {
+    if (!isElectron) return
+    await window.electronAPI!.installUpdate()
+  }
+
+  if (!isElectron) {
+    return (
+      <div className="space-y-4">
+        <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider mb-3">Updates</p>
+        <div className="flex flex-col items-center justify-center py-8 px-4 rounded-xl border border-outline/10 bg-surface-variant/10">
+          <span className="material-symbols-outlined text-[32px] text-on-surface-variant/40 block mb-2">computer</span>
+          <p className="text-sm text-on-surface-variant">Auto-updates are only available in the desktop app.</p>
+          <a
+            href="https://github.com/katrate/notie/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 px-4 py-2 rounded-lg bg-primary text-on-primary text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
+            Go to Releases
+          </a>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider mb-3">Updates</p>
+
+      {/* Current version */}
+      <div className="flex items-center justify-between p-4 rounded-xl bg-surface-variant/20 border border-outline/10">
+        <div className="flex items-center gap-3">
+          <span className="material-symbols-outlined text-[20px] text-primary">info</span>
+          <div>
+            <p className="text-sm font-medium text-on-surface">Current Version</p>
+            <p className="text-xs text-on-surface-variant">Notie v{currentVersion || '...'}</p>
+          </div>
+        </div>
+        <button
+          onClick={handleCheck}
+          disabled={status === 'checking'}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline/20 text-on-surface-variant hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-colors text-xs font-medium disabled:opacity-50"
+        >
+          {status === 'checking' ? (
+            <>
+              <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              Checking...
+            </>
+          ) : (
+            <>
+              <span className="material-symbols-outlined text-[14px]">refresh</span>
+              Check for Updates
+            </>
+          )}
+        </button>
+      </div>
+
+      {status === 'not-available' && (
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+          <span className="material-symbols-outlined text-[20px] text-emerald-400">check_circle</span>
+          <p className="text-sm text-on-surface">You're up to date! Notie v{currentVersion} is the latest version.</p>
+        </div>
+      )}
+
+      {status === 'available' && updateInfo && (
+        <div className="flex flex-col gap-3 p-4 rounded-xl bg-accent/10 border border-accent/30">
+          <div className="flex items-center gap-3">
+            <span className="material-symbols-outlined text-[20px] text-accent">system_update</span>
+            <div>
+              <p className="text-sm font-medium text-on-surface">Update Available</p>
+              <p className="text-xs text-on-surface-variant">Version {updateInfo.version} is ready to download</p>
+            </div>
+          </div>
+          <button
+            onClick={handleDownload}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent text-on-accent text-sm font-medium hover:bg-accent/90 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[18px]">download</span>
+            Download Update
+          </button>
+        </div>
+      )}
+
+      {status === 'downloading' && (
+        <div className="flex flex-col gap-2 p-4 rounded-xl bg-primary/10 border border-primary/30">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[20px] text-primary">download</span>
+            <span className="text-sm font-medium text-on-surface">Downloading...</span>
+          </div>
+          <div className="w-full h-2 rounded-full bg-surface-variant/40 overflow-hidden">
+            <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${downloadProgress}%` }} />
+          </div>
+          <span className="text-xs text-on-surface-variant">{downloadProgress}% complete</span>
+        </div>
+      )}
+
+      {status === 'downloaded' && (
+        <div className="flex flex-col gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+          <div className="flex items-center gap-3">
+            <span className="material-symbols-outlined text-[20px] text-emerald-400">check_circle</span>
+            <div>
+              <p className="text-sm font-medium text-on-surface">Update Downloaded</p>
+              <p className="text-xs text-on-surface-variant">Restart the app to install the update</p>
+            </div>
+          </div>
+          <button
+            onClick={handleInstall}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-500 text-white text-sm font-medium hover:bg-emerald-600 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[18px]">restart_alt</span>
+            Restart & Install
+          </button>
+        </div>
+      )}
+
+      {status === 'error' && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20">
+          <span className="material-symbols-outlined text-[20px] text-red-400 flex-shrink-0 mt-0.5">error</span>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-on-surface">Update Check Failed</p>
+            <p className="text-xs text-on-surface-variant mt-1">{errorMsg || 'Could not reach the update server.'}</p>
+            <button
+              onClick={handleCheck}
+              className="mt-2 px-3 py-1.5 rounded-lg bg-on-surface/10 text-on-surface-variant hover:bg-on-surface/20 transition-colors text-xs font-medium"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
