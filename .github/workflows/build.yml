@@ -40,8 +40,12 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           gh release create "$TAG" --title "Notie $TAG" --generate-notes 2>/dev/null || true
+          ls -la release/
           for f in release/*; do
-            [ -f "$f" ] && gh release upload "$TAG" "$f" --clobber
+            if [ -f "$f" ]; then
+              echo "Uploading $f..."
+              gh release upload "$TAG" "$f" --clobber || echo "Failed to upload $f"
+            fi
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
