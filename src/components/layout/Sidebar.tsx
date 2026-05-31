@@ -1277,6 +1277,7 @@ export function Sidebar() {
             <div className="w-6 h-6 rounded overflow-hidden flex items-center justify-center">
               <img src="/logo.jpg" alt="Notie Logo" className="w-full h-full object-cover" />
             </div>
+            <span className="text-[9px] font-mono text-primary/60 font-semibold tracking-tight">v0.1.5</span>
           </div>
           <button
             onClick={() => setShowSearchModal(true)}
