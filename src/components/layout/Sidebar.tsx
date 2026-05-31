@@ -306,6 +306,7 @@ const PageTreeItem = ({ page, allPages, activePageId, navigateToPage, confirmDel
 };
 
 export function Sidebar() {
+  const [appVersion, setAppVersion] = useState('')
   const [showCreatePage, setShowCreatePage] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -510,6 +511,13 @@ export function Sidebar() {
       setOpenCreateProjectModal(false);
     }
   }, [openCreateProjectModal, setOpenCreateProjectModal]);
+
+  // Fetch app version if in Electron
+  useEffect(() => {
+    if (window.electronAPI) {
+      window.electronAPI.getAppVersion().then(setAppVersion)
+    }
+  }, [])
 
   // Fetch standalone pages on mount
   useEffect(() => {
@@ -1276,8 +1284,9 @@ export function Sidebar() {
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <div className="w-6 h-6 rounded overflow-hidden flex items-center justify-center">
               <img src="/logo.jpg" alt="Notie Logo" className="w-full h-full object-cover" />
-            </div>
-            <span className="text-[9px] font-mono text-primary/60 font-semibold tracking-tight">v0.1.5</span>
+            </div>              {appVersion && (
+                <span className="text-[9px] font-mono text-primary/60 font-semibold tracking-tight">v{appVersion}</span>
+              )}
           </div>
           <button
             onClick={() => setShowSearchModal(true)}
