@@ -41,7 +41,16 @@ function getGradientCSS(id: string, theme: ThemeMode): string {
 
 function SettingsModalContent({ onClose }: { onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<Tab>('account')
+  const [appVersion, setAppVersion] = useState('')
+  const currentVersion = appVersion
   const { user, signOut } = useAuthStore()
+
+  // Fetch current version for footer display
+  useEffect(() => {
+    if (window.electronAPI) {
+      window.electronAPI.getAppVersion().then(setAppVersion)
+    }
+  }, [])
   const { theme, accentColor, setTheme, setAccentColor } = useThemeStore()
   const bgStorageKey = `notie-bg-${theme}`
   const bgSolidKey = `notie-bg-${theme}-solid`
@@ -340,7 +349,7 @@ function SettingsModalContent({ onClose }: { onClose: () => void }) {
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-outline/10 flex justify-between items-center">
-          <span className="text-[11px] text-on-surface-variant">v0.1.0</span>
+          <span className="text-[11px] text-on-surface-variant">v{currentVersion || '...'}</span>
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
