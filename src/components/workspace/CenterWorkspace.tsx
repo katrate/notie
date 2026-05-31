@@ -589,30 +589,35 @@ function HeaderBar() {
 
         <div className="flex items-center gap-3 flex-shrink-0">
           <div className="flex items-center bg-surface-variant/30 border border-outline/5 rounded-full p-0.5 shadow-inner">
-            <Tooltip label="Editor only" shortcut={platformShortcut('Ctrl+Alt+V')} position="bottom">
-            <button
-              onClick={() => setViewMode('editor')}
-              className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${viewMode === 'editor' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'}`}
-            >
-              <span className="material-symbols-outlined text-[14px]">edit</span>
-            </button>
-            </Tooltip>
-            <Tooltip label="Editor and Graph" shortcut={platformShortcut('Ctrl+Alt+V')} position="bottom">
-            <button
-              onClick={() => setViewMode('both')}
-              className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${viewMode === 'both' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'}`}
-            >
-              <span className="material-symbols-outlined text-[14px]">view_sidebar</span>
-            </button>
-            </Tooltip>
-            <Tooltip label="Graph only" shortcut={platformShortcut('Ctrl+Alt+V')} position="bottom">
-            <button
-              onClick={() => setViewMode('graph')}
-              className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${viewMode === 'graph' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'}`}
-            >
-              <span className="material-symbols-outlined text-[14px]">grain</span>
-            </button>
-            </Tooltip>
+            {/* View mode toggle — hidden for standalone pages */}
+            {activeProjectId && (
+              <>
+                <Tooltip label="Editor only" shortcut={platformShortcut('Ctrl+Alt+V')} position="bottom">
+                <button
+                  onClick={() => setViewMode('editor')}
+                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${viewMode === 'editor' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'}`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">edit</span>
+                </button>
+                </Tooltip>
+                <Tooltip label="Editor and Graph" shortcut={platformShortcut('Ctrl+Alt+V')} position="bottom">
+                <button
+                  onClick={() => setViewMode('both')}
+                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${viewMode === 'both' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'}`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">view_sidebar</span>
+                </button>
+                </Tooltip>
+                <Tooltip label="Graph only" shortcut={platformShortcut('Ctrl+Alt+V')} position="bottom">
+                <button
+                  onClick={() => setViewMode('graph')}
+                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${viewMode === 'graph' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'}`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">grain</span>
+                </button>
+                </Tooltip>
+              </>
+            )}
             {/* Toggle left panel */}
             <SidebarToggleButton />
           </div>

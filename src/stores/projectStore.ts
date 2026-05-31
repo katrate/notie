@@ -196,6 +196,7 @@ interface ProjectState {
   updatePage: (pageId: string, updates: Partial<Page>) => Promise<void>;
   updateProject: (projectId: string, updates: Partial<Project>) => Promise<void>;
   viewMode: ViewMode;
+  savedViewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
   sidebarVisible: boolean;
   setSidebarVisible: (visible: boolean) => void;
@@ -218,6 +219,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   activeProjectId: null,
   activePageId: null,
   viewMode: 'both' as ViewMode,
+  savedViewMode: 'both' as ViewMode,
   sidebarVisible: true,
   pendingGraphLink: null,
   graphEditorInsert: null,
@@ -468,6 +470,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   setActiveProject: async (id) => {
+    const { viewMode, savedViewMode } = get();
     // Keep standalone pages (no project_id) when switching projects
     set(state => ({
       activeProjectId: id,
@@ -475,6 +478,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       pages: state.pages.filter(p => !p.project_id),
     }))
     if (id) {
+      // Restore saved viewMode when opening a project
+      if (savedViewMode && viewMode === 'editor') {
+        set({ viewMode: savedViewMode });
+      }
       saveLastSession(id, null);
       await get().fetchPages(id)
       const { pages } = get()
@@ -492,6 +499,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         saveLastSession(id, firstPage.id)
       }
     } else {
+      // Save current viewMode and switch to editor when leaving a project
+      const currentViewMode = get().viewMode;
+      set({ savedViewMode: currentViewMode, viewMode: 'editor' });
       saveLastSession(null, null);
       // Re-fetch standalone pages to get latest
       await get().fetchStandalonePages();
@@ -500,12 +510,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   setActivePage: (id) => {
-    const { pages, activeProjectId } = get();
+    const { pages, activeProjectId, viewMode, savedViewMode } = get();
     if (id) {
       const page = pages.find(p => p.id === id);
       if (page) {
         // If page has a project_id, ensure activeProjectId matches it
         if (page.project_id) {
+          // Restore saved viewMode when switching to a project page
+          if (savedViewMode && viewMode === 'editor') {
+            set({ viewMode: savedViewMode });
+          }
           if (activeProjectId !== page.project_id) {
             set({ activePageId: id, activeProjectId: page.project_id });
             saveLastSession(page.project_id, id);
@@ -515,8 +529,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
           saveLastSession(page.project_id, id);
           return;
         }
-        // Standalone page (no project_id) — clear activeProjectId
-        set({ activePageId: id, activeProjectId: null });
+        // Standalone page (no project_id) — clear activeProjectId, disable graph
+        set({ activePageId: id, activeProjectId: null, savedViewMode: viewMode, viewMode: 'editor' });
         saveLastSession(null, id);
         return;
       }
@@ -524,7 +538,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ activePageId: id });
     saveLastSession(activeProjectId, id);
   },
-  setViewMode: (mode) => set({ viewMode: mode }),
+  setViewMode: (mode) => set(state => {
+    // Force 'editor' when viewing standalone pages — graph disabled for standalones
+    if (state.activePageId && !state.activeProjectId) {
+      return { viewMode: 'editor' };
+    }
+    return { viewMode: mode };
+  }),
   setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
 
   updatePageContent: async (pageId, content) => {

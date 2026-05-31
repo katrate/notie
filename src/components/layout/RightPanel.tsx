@@ -63,7 +63,11 @@ export function RightPanel() {
         {activeProjectId ? (
            <GraphCanvas projectId={activeProjectId} />
         ) : (
-           <div className="w-full h-full flex items-center justify-center text-on-surface-variant/50 text-sm">No project selected</div>
+           <div className="w-full h-full flex flex-col items-center justify-center text-on-surface-variant/50 px-4 gap-2">
+            <span className="material-symbols-outlined text-[32px] text-on-surface-variant/30">grain</span>
+            <span className="text-sm text-center">Graph is disabled for standalone pages</span>
+            <span className="text-xs text-on-surface-variant/30 text-center">Open a project to view the graph</span>
+          </div>
         )}
       </div>
     </aside>

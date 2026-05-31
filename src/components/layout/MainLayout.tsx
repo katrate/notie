@@ -5,7 +5,7 @@ import { useProjectStore } from '../../stores/projectStore'
 import { Panel, Group, Separator } from 'react-resizable-panels'
 
 export function MainLayout() {
-  const { viewMode, sidebarVisible } = useProjectStore()
+  const { viewMode, sidebarVisible, activeProjectId } = useProjectStore()
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
@@ -33,8 +33,8 @@ export function MainLayout() {
           <Separator className="w-1 bg-outline/10 hover:bg-primary/50 active:bg-primary/70 transition-colors cursor-col-resize z-30" />
         )}
 
-        {/* Right Graph Panel */}
-        {viewMode !== 'editor' && (
+        {/* Right Graph Panel — only shows for project pages */}
+        {viewMode !== 'editor' && activeProjectId && (
           <Panel id="graph" defaultSize={viewMode === 'both' ? '30%' : undefined} minSize="200px">
             <RightPanel />
           </Panel>
