@@ -9,22 +9,23 @@ const DOWNLOADS = {
     label: "Windows",
     icon: PLATFORM_ICONS.windows,
     files: [
-      { name: "Portable (.zip)", url: "https://github.com/katrate/notie/releases/download/v0.1.1/Notie-0.1.1-win.zip" },
+      { name: "Installer (.exe)", url: "https://github.com/katrate/notie/releases/download/v0.1.1/Notie-0.1.1-win-x64.exe" },
+      { name: "MSI Package", url: "https://github.com/katrate/notie/releases/download/v0.1.1/Notie-0.1.1-win-x64.msi" },
     ],
   },
   macos: {
     label: "macOS",
     icon: PLATFORM_ICONS.apple,
     files: [
-      { name: "Apple Silicon (M1+)", url: "https://github.com/katrate/notie/releases/latest/download/Notie-0.1.1-arm64.dmg" },
-      { name: "Intel", url: "https://github.com/katrate/notie/releases/latest/download/Notie-0.1.1-x64.dmg" },
+      { name: "Intel (.dmg)", url: "https://github.com/katrate/notie/releases/download/v0.1.1/Notie-0.1.1-mac-x64.dmg" },
     ],
   },
   linux: {
     label: "Linux",
     icon: PLATFORM_ICONS.linux,
     files: [
-      { name: "AppImage", url: "https://github.com/katrate/notie/releases/latest/download/Notie-0.1.1-x86_64.AppImage" },
+      { name: "AppImage", url: "https://github.com/katrate/notie/releases/download/v0.1.1/Notie-0.1.1-linux-x64.AppImage" },
+      { name: "Debian (.deb)", url: "https://github.com/katrate/notie/releases/download/v0.1.1/Notie-0.1.1-linux-x64.deb" },
     ],
   },
 };

@@ -60,17 +60,30 @@
       "dist/**/*",
       "dist-electron/**/*"
     ],
-    "electronDist": "node_modules/electron/dist",
     "win": {
       "target": [
+        "nsis",
+        "msi"
+      ],
+      "icon": "public/logo.jpg",
+      "signAndEditExecutable": false,
+      "artifactName": "Notie-${version}-${os}-${arch}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
         "zip"
       ],
       "icon": "public/logo.jpg",
-      "signAndEditExecutable": false
+      "category": "public.app-category.productivity"
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "public/logo.jpg",
+      "category": "Office"
     }
   }
 }
