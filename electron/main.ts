@@ -14,7 +14,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     maximized: true,
-    icon: join(__dirname, '../public/logo.jpg'),
+    icon: join(__dirname, process.env.VITE_DEV_SERVER_URL ? '../public/logo.png' : '../dist/logo.png'),
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
