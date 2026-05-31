@@ -65,7 +65,7 @@
         "nsis",
         "msi"
       ],
-      "icon": "public/logo.jpg",
+      "icon": "public/logo.png",
       "signAndEditExecutable": false,
       "artifactName": "Notie-${version}-${os}-${arch}.${ext}"
     },
@@ -74,7 +74,7 @@
         "dmg",
         "zip"
       ],
-      "icon": "public/logo.jpg",
+      "icon": "public/logo.png",
       "category": "public.app-category.productivity"
     },
     "linux": {
@@ -82,7 +82,7 @@
         "AppImage",
         "deb"
       ],
-      "icon": "public/logo.jpg",
+      "icon": "public/logo.png",
       "category": "Office"
     }
   }
