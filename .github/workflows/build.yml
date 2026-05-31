@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  release:
-    types: [published]
 
 permissions:
   contents: write
@@ -35,12 +33,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifacts
+      - name: Ensure release exists and upload
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          if [ -z "$TAG" ]; then
-            TAG="${GITHUB_REF_NAME}"
-          fi
+          TAG="${GITHUB_REF_NAME}"
+          gh release create "$TAG" --title "Notie $TAG" --generate-notes 2>/dev/null || true
           gh release upload "$TAG" release/* --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
