@@ -55,6 +55,25 @@ export function EditorContextMenu({ editor, activePageId }: EditorContextMenuPro
           type: 'board', label: `${card.title}  —  ${p.title}`, icon: 'sticky_note_2', iconColor: 'text-violet-400',
           action: () => {
             (ed.commands as any).insertBoardCard({ cardId: card.id, title: card.title, pageId: p.id });
+            // Also add the current page to the card's linkedPages for bidirectional linking
+            const boardPage = allPages.find(bp => bp.id === p.id);
+            if (boardPage && Array.isArray(boardPage.content)) {
+              const currentPage = allPages.find(cp => cp.id === activePageId);
+              if (currentPage) {
+                const newContent = [...boardPage.content];
+                const cardIdx = newContent.findIndex((c: any) => c.id === card.id);
+                if (cardIdx !== -1) {
+                  const updatedCard = { ...newContent[cardIdx] };
+                  const linkedPages = updatedCard.linkedPages || [];
+                  if (!linkedPages.some((lp: any) => lp.pageId === activePageId)) {
+                    updatedCard.linkedPages = [...linkedPages, { pageId: activePageId, pageTitle: currentPage.title || 'Untitled' }];
+                    newContent[cardIdx] = updatedCard;
+                    store.updatePageContent(p.id, newContent);
+                  }
+                }
+              }
+            }
+            store.setPendingGraphLink({ sourcePageId: activePageId, targetPageId: p.id });
             closeMenu();
           },
         });

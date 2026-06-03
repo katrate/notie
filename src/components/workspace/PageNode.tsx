@@ -38,7 +38,31 @@ export const PageNode = React.memo(function PageNode({ id, data }: any) {
   }, [edges, id]);
 
   return (
-    <div className="shadow-md rounded-xl bg-surface border border-outline/20 overflow-hidden min-w-[140px]">
+    <div className="shadow-md rounded-xl bg-surface border border-outline/20 overflow-hidden min-w-[140px] relative">
+      {/* Top target handle — connect to this page from above */}
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="!bg-transparent cursor-pointer"
+        style={{
+          width: 10,
+          height: 10,
+          backgroundColor: 'rgba(255,255,255,0.12)',
+          border: '2px solid rgba(255,255,255,0.25)',
+          opacity: 0.35,
+          transition: 'all 0.15s ease',
+          borderRadius: '50%',
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.opacity = '1';
+          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.7)';
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.opacity = '0.35';
+          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)';
+        }}
+      />
+
       {/* Title bar with left/right circular handles */}
       <div
         className="px-3 py-2.5 flex items-center gap-2 border-b border-outline/15 relative"
@@ -159,6 +183,30 @@ export const PageNode = React.memo(function PageNode({ id, data }: any) {
           })}
         </div>
       )}
+
+      {/* Bottom source handle — drag connections from this page downward */}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!bg-transparent cursor-crosshair"
+        style={{
+          width: 10,
+          height: 10,
+          backgroundColor: 'rgba(255,255,255,0.15)',
+          border: '2px solid rgba(255,255,255,0.3)',
+          opacity: 0.35,
+          transition: 'all 0.15s ease',
+          borderRadius: '50%',
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.opacity = '1';
+          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.7)';
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.opacity = '0.35';
+          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.3)';
+        }}
+      />
     </div>
   );
 });

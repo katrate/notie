@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useProjectStore } from '../../stores/projectStore'
 import { useToastStore } from '../../stores/toastStore'
 import { Tooltip } from '../Tooltip'
@@ -101,6 +101,8 @@ export function FileView() {
   const [files, setFiles] = useState<FileItem[]>([])
   const [search, setSearch] = useState('')
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
+  const [zoomLevel, setZoomLevel] = useState(100) // percentage, 50-200
 
   // Sync from page content
   useEffect(() => {
@@ -193,6 +195,31 @@ export function FileView() {
     )
   }, [files, search])
 
+  // Keyboard shortcuts for zoom
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return
+    if (e.key === '-' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      setZoomLevel(z => Math.max(50, z - 10))
+    }
+    if (e.key === '=' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      setZoomLevel(z => Math.min(200, z + 10))
+    }
+    if (e.key === '0' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      setZoomLevel(100)
+    }
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleKeyDown])
+
+  // Computed item size based on zoom
+  const scaleFactor = zoomLevel / 100
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       {/* Header */}
@@ -200,6 +227,57 @@ export function FileView() {
         <span className="material-symbols-outlined text-[22px] text-primary">folder</span>
         <h2 className="text-lg font-bold text-on-surface">Files</h2>
         <span className="text-[11px] text-on-surface-variant/60">{files.length} file{files.length !== 1 ? 's' : ''}</span>
+
+        {/* Zoom controls */}
+        <div className="flex items-center gap-0.5 ml-2">
+          <Tooltip label="List view">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-on-surface-variant hover:bg-on-surface/10'}`}
+            >
+              <span className="material-symbols-outlined text-[14px]">view_list</span>
+            </button>
+          </Tooltip>
+          <Tooltip label="Grid view">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-primary/15 text-primary' : 'text-on-surface-variant hover:bg-on-surface/10'}`}
+            >
+              <span className="material-symbols-outlined text-[14px]">grid_view</span>
+            </button>
+          </Tooltip>
+          <div className="w-px h-4 bg-outline/10 mx-1" />
+          <Tooltip label="Zoom out (Ctrl+-)">
+            <button
+              onClick={() => setZoomLevel(z => Math.max(50, z - 10))}
+              disabled={zoomLevel <= 50}
+              className="p-1 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30"
+            >
+              <span className="material-symbols-outlined text-[14px]">zoom_out</span>
+            </button>
+          </Tooltip>
+          <span className="text-[10px] text-on-surface-variant/60 min-w-[30px] text-center tabular-nums select-none">{zoomLevel}%</span>
+          <Tooltip label="Zoom in (Ctrl+=)">
+            <button
+              onClick={() => setZoomLevel(z => Math.min(200, z + 10))}
+              disabled={zoomLevel >= 200}
+              className="p-1 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30"
+            >
+              <span className="material-symbols-outlined text-[14px]">zoom_in</span>
+            </button>
+          </Tooltip>
+          <input
+            type="range"
+            min={50}
+            max={200}
+            value={zoomLevel}
+            onChange={e => setZoomLevel(Number(e.target.value))}
+            className="w-16 md:w-20 h-1 accent-primary cursor-pointer ml-1"
+            title="Zoom level"
+            aria-label="Zoom level"
+          />
+          <div className="w-px h-4 bg-outline/10 ml-2 mr-1" />
+        </div>
 
         <div className="ml-auto flex items-center gap-2">
           <div className="relative">
@@ -240,52 +318,116 @@ export function FileView() {
             )}
           </div>
         ) : (
-          <div className="space-y-1">
-            {filtered.map(file => (
-              <div
-                key={file.id}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl border border-outline/5 bg-surface/20 hover:bg-surface/40 hover:border-outline/15 transition-all duration-150 group cursor-pointer"
-                onMouseEnter={() => setHoveredId(file.id)}
-                onMouseLeave={() => setHoveredId(null)}
-                onDoubleClick={() => handleOpenFile(file)}
-              >
-                {/* File icon */}
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-[22px] text-primary">
-                    {getFileIcon(file.originalName)}
-                  </span>
-                </div>
-
-                {/* File info */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-on-surface truncate">{file.originalName}</p>
-                  <p className="text-[11px] text-on-surface-variant/60 mt-0.5">
-                    {formatSize(file.size)} · {timeAgo(file.addedAt)}
-                  </p>
-                </div>
-
-                {/* Actions */}
-                <div className={`flex items-center gap-1 transition-all duration-150 ${hoveredId === file.id ? 'opacity-100' : 'opacity-0'}`}>
-                  <Tooltip label="Open file">
-                    <button
-                      onClick={() => handleOpenFile(file)}
-                      className="p-1.5 rounded-lg hover:bg-primary/10 text-on-surface-variant hover:text-primary transition-colors"
+          <>
+            {viewMode === 'list' ? (
+              /* ── List view (zoom via computed sizes) ── */
+              <div className="flex flex-col" style={{ gap: `${4 * scaleFactor}px` }}>
+                {filtered.map(file => (
+                  <div
+                    key={file.id}
+                    className="flex items-center rounded-xl border border-outline/5 bg-surface/20 hover:bg-surface/40 hover:border-outline/15 transition-all duration-150 group cursor-pointer"
+                    style={{ padding: `${12 * scaleFactor}px ${16 * scaleFactor}px`, gap: `${12 * scaleFactor}px` }}
+                    onMouseEnter={() => setHoveredId(file.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    onDoubleClick={() => handleOpenFile(file)}
+                  >
+                    {/* File icon */}
+                    <div className="rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
+                      style={{ width: `${40 * scaleFactor}px`, height: `${40 * scaleFactor}px` }}
                     >
-                      <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                    </button>
-                  </Tooltip>
-                  <Tooltip label="Remove from list">
-                    <button
-                      onClick={() => handleDeleteFile(file.id)}
-                      className="p-1.5 rounded-lg hover:bg-red-500/15 text-on-surface-variant hover:text-red-400 transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">delete</span>
-                    </button>
-                  </Tooltip>
-                </div>
+                      <span className="material-symbols-outlined text-primary" style={{ fontSize: `${22 * scaleFactor}px` }}>
+                        {getFileIcon(file.originalName)}
+                      </span>
+                    </div>
+
+                    {/* File info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-on-surface truncate" style={{ fontSize: `${14 * scaleFactor}px` }}>{file.originalName}</p>
+                      <p className="text-on-surface-variant/60" style={{ fontSize: `${11 * scaleFactor}px`, marginTop: `${2 * scaleFactor}px` }}>
+                        {formatSize(file.size)} · {timeAgo(file.addedAt)}
+                      </p>
+                    </div>
+
+                    {/* Actions */}
+                    <div className={`flex items-center transition-all duration-150 ${hoveredId === file.id ? 'opacity-100' : 'opacity-0'}`} style={{ gap: `${4 * scaleFactor}px` }}>
+                      <Tooltip label="Open file">
+                        <button
+                          onClick={() => handleOpenFile(file)}
+                          className="rounded-lg hover:bg-primary/10 text-on-surface-variant hover:text-primary transition-colors"
+                          style={{ padding: `${6 * scaleFactor}px` }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: `${16 * scaleFactor}px` }}>open_in_new</span>
+                        </button>
+                      </Tooltip>
+                      <Tooltip label="Remove from list">
+                        <button
+                          onClick={() => handleDeleteFile(file.id)}
+                          className="rounded-lg hover:bg-red-500/15 text-on-surface-variant hover:text-red-400 transition-colors"
+                          style={{ padding: `${6 * scaleFactor}px` }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: `${16 * scaleFactor}px` }}>delete</span>
+                        </button>
+                      </Tooltip>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            ) : (
+              /* ── Grid view ── */
+              <div className="grid gap-3" style={{
+                gridTemplateColumns: `repeat(auto-fill, minmax(${140 * scaleFactor}px, 1fr))`
+              }}>
+                {filtered.map(file => (
+                  <div
+                    key={file.id}
+                    className="flex flex-col items-center gap-2 p-4 rounded-xl border border-outline/5 bg-surface/20 hover:bg-surface/40 hover:border-outline/15 transition-all duration-150 group cursor-pointer"
+                    onMouseEnter={() => setHoveredId(file.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    onDoubleClick={() => handleOpenFile(file)}
+                  >
+                    {/* File icon */}
+                    <div className="rounded-xl bg-primary/10 flex items-center justify-center"
+                      style={{ width: `${48 * scaleFactor}px`, height: `${48 * scaleFactor}px` }}
+                    >
+                      <span className="material-symbols-outlined text-primary" style={{ fontSize: `${32 * scaleFactor}px` }}>
+                        {getFileIcon(file.originalName)}
+                      </span>
+                    </div>
+
+                    {/* File name */}
+                    <p className="font-medium text-on-surface text-center leading-tight line-clamp-2"
+                      style={{ fontSize: `${12 * scaleFactor}px`, maxWidth: `${120 * scaleFactor}px` }}
+                    >
+                      {file.originalName}
+                    </p>
+                    <p className="text-on-surface-variant/60" style={{ fontSize: `${10 * scaleFactor}px` }}>
+                      {formatSize(file.size)}
+                    </p>
+
+                    {/* Actions */}
+                    <div className={`flex items-center gap-1 mt-1 transition-all duration-150 ${hoveredId === file.id ? 'opacity-100' : 'opacity-0'}`}>
+                      <Tooltip label="Open file">
+                        <button
+                          onClick={() => handleOpenFile(file)}
+                          className="p-1 rounded-lg hover:bg-primary/10 text-on-surface-variant hover:text-primary transition-colors"
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: `${14 * scaleFactor}px` }}>open_in_new</span>
+                        </button>
+                      </Tooltip>
+                      <Tooltip label="Remove from list">
+                        <button
+                          onClick={() => handleDeleteFile(file.id)}
+                          className="p-1 rounded-lg hover:bg-red-500/15 text-on-surface-variant hover:text-red-400 transition-colors"
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: `${14 * scaleFactor}px` }}>delete</span>
+                        </button>
+                      </Tooltip>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

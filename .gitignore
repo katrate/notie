@@ -13,3 +13,4 @@ src-tauri/gen/
 debug.txt
 nul
 _check.mjs
+.vercel

@@ -416,6 +416,10 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
       if (page.type === 'file' && Array.isArray(page.content)) {
         pageSockets.push({ id: 'files', label: 'Files', count: page.content.length });
       }
+      if (page.type === 'pdf') {
+        const hasPdf = page.content && typeof page.content === 'object' && (page.content as any)?.pdfFile;
+        pageSockets.push({ id: 'files', label: 'PDF', count: hasPdf ? 1 : 0 });
+      }
       if (page.type === 'video' && Array.isArray(page.content)) {
         pageSockets.push({ id: 'video', label: 'Clips', count: page.content.length });
       }
@@ -814,6 +818,130 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
         if (eds.some(e => e.id === edgeId)) return eds;
         return [...eds, {
           id: edgeId, source, target, animated: true,
+          style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
+        }];
+      });
+      return;
+    }
+
+    // ── Page ↔ Board Card connections ──
+
+    // page → boardcard: add card ref to page content & add page to card's linkedPages
+    if (source.startsWith('page-') && target.startsWith('boardcard-')) {
+      const sourcePageId = source.replace('page-', '');
+      const boardCardMatch = target.match(/^boardcard-(.+)-([a-z0-9]+)$/);
+      let matchedBoardPageId: string | null = null;
+      let matchedCardId: string | null = null;
+      if (boardCardMatch) {
+        matchedBoardPageId = boardCardMatch[1];
+        matchedCardId = boardCardMatch[2];
+        const sourcePage = pages.find(p => p.id === sourcePageId);
+        const boardPage = pages.find(p => p.id === matchedBoardPageId);
+        const card = boardPage && Array.isArray(boardPage.content)
+          ? (boardPage.content as any[]).find((c: any) => c.id === matchedCardId)
+          : null;
+
+        if (card && boardPage && sourcePage) {
+          // Add card ref to source page's content
+          if (sourcePage.type === 'text' || !sourcePage.type) {
+            const sourceContent = sourcePage.content || { type: 'doc', content: [] };
+            const contentArray = Array.isArray(sourceContent.content) ? sourceContent.content : [];
+            const alreadyLinked = contentArray.some(
+              (n: any) => n.type === 'boardCardBlock' && n.attrs?.cardId === matchedCardId && n.attrs?.pageId === matchedBoardPageId
+            );
+            if (!alreadyLinked) {
+              const updatedContent = {
+                ...sourceContent,
+                content: [...contentArray, {
+                  type: 'boardCardBlock' as const,
+                  attrs: { cardId: card.id, title: card.title || 'Untitled', pageId: matchedBoardPageId },
+                }],
+              };
+              await updatePageContent(sourcePageId, updatedContent);
+            }
+          }
+
+          // Add source page to card's linkedPages
+          const newContent = [...boardPage.content];
+          const cardIdx = newContent.findIndex((c: any) => c.id === matchedCardId);
+          if (cardIdx !== -1 && matchedBoardPageId) {
+            const updatedCard = { ...newContent[cardIdx] };
+            const linkedPages = updatedCard.linkedPages || [];
+            if (!linkedPages.some((lp: any) => lp.pageId === sourcePageId)) {
+              updatedCard.linkedPages = [...linkedPages, { pageId: sourcePageId, pageTitle: sourcePage.title || 'Untitled' }];
+              newContent[cardIdx] = updatedCard;
+              await updatePageContent(matchedBoardPageId, newContent);
+            }
+          }
+        }
+      }
+
+      const linkEdgeId = `edge-boardcard-link-${sourcePageId}-${matchedCardId || target}`;
+      setEdges(eds => {
+        if (eds.some(e => e.id === linkEdgeId)) return eds;
+        return [...eds, {
+          id: linkEdgeId, source, target, animated: true,
+          style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
+        }];
+      });
+      return;
+    }
+
+    // boardcard → page: add page to card's linkedPages & add card ref to page content
+    if (source.startsWith('boardcard-') && target.startsWith('page-')) {
+      const targetPageId = target.replace('page-', '');
+      const boardCardMatch = source.match(/^boardcard-(.+)-([a-z0-9]+)$/);
+      let matchedBoardPageId: string | null = null;
+      let matchedCardId: string | null = null;
+      if (boardCardMatch) {
+        matchedBoardPageId = boardCardMatch[1];
+        matchedCardId = boardCardMatch[2];
+        const boardPage = pages.find(p => p.id === matchedBoardPageId);
+        const targetPage = pages.find(p => p.id === targetPageId);
+        const card = boardPage && Array.isArray(boardPage.content)
+          ? (boardPage.content as any[]).find((c: any) => c.id === matchedCardId)
+          : null;
+
+        if (card && boardPage && targetPage) {
+          // Add target page to card's linkedPages
+          const newContent = [...boardPage.content];
+          const cardIdx = newContent.findIndex((c: any) => c.id === matchedCardId);
+          if (cardIdx !== -1 && matchedBoardPageId) {
+            const updatedCard = { ...newContent[cardIdx] };
+            const linkedPages = updatedCard.linkedPages || [];
+            if (!linkedPages.some((lp: any) => lp.pageId === targetPageId)) {
+              updatedCard.linkedPages = [...linkedPages, { pageId: targetPageId, pageTitle: targetPage.title || 'Untitled' }];
+              newContent[cardIdx] = updatedCard;
+              await updatePageContent(matchedBoardPageId, newContent);
+            }
+          }
+
+          // Add card ref to target page's content
+          if (targetPage.type === 'text' || !targetPage.type) {
+            const targetContent = targetPage.content || { type: 'doc', content: [] };
+            const contentArray = Array.isArray(targetContent.content) ? targetContent.content : [];
+            const alreadyLinked = contentArray.some(
+              (n: any) => n.type === 'boardCardBlock' && n.attrs?.cardId === matchedCardId && n.attrs?.pageId === matchedBoardPageId
+            );
+            if (!alreadyLinked) {
+              const updatedContent = {
+                ...targetContent,
+                content: [...contentArray, {
+                  type: 'boardCardBlock' as const,
+                  attrs: { cardId: card.id, title: card.title || 'Untitled', pageId: matchedBoardPageId },
+                }],
+              };
+              await updatePageContent(targetPageId, updatedContent);
+            }
+          }
+        }
+      }
+
+      const linkEdgeId = `edge-boardcard-link-${matchedBoardPageId || 'unknown'}-${matchedCardId || target}`;
+      setEdges(eds => {
+        if (eds.some(e => e.id === linkEdgeId)) return eds;
+        return [...eds, {
+          id: linkEdgeId, source, target, animated: true,
           style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
         }];
       });
@@ -1994,11 +2122,26 @@ function buildBoardSubGraph(
           style: { stroke: 'rgba(139, 92, 246, 0.5)', strokeWidth: 2 },
         });
       }
+
+      // ── Create edges from card to its linked pages (tag-sort mode) ──
+      if (card.linkedPages && Array.isArray(card.linkedPages)) {
+        card.linkedPages.forEach((lp: any) => {
+          if (!lp.pageId) return;
+          const edgeId = `edge-boardcard-linked-${page.id}-${card.id}-${lp.pageId}`;
+          if (!newEdges.some((e: any) => e.id === edgeId)) {
+            newEdges.push({
+              id: edgeId,
+              source: cardNodeId,
+              target: `page-${lp.pageId}`,
+              animated: true,
+              style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
+            });
+          }
+        });
+      }
     });
     return;
-  }
-
-  // ── Default mode: group by columns ──
+  }    // ── Default mode: group by columns ──
   const createdColNodes = new Set<string>();
 
   cards.forEach((card: any) => {
@@ -2052,6 +2195,23 @@ function buildBoardSubGraph(
       animated: true,
       style: { stroke: 'rgba(139, 92, 246, 0.5)', strokeWidth: 2 },
     });
+
+    // ── Create edges from card to its linked pages ──
+    if (card.linkedPages && Array.isArray(card.linkedPages)) {
+      card.linkedPages.forEach((lp: any) => {
+        if (!lp.pageId) return;
+        const edgeId = `edge-boardcard-linked-${page.id}-${card.id}-${lp.pageId}`;
+        if (!newEdges.some((e: any) => e.id === edgeId)) {
+          newEdges.push({
+            id: edgeId,
+            source: cardNodeId,
+            target: `page-${lp.pageId}`,
+            animated: true,
+            style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
+          });
+        }
+      });
+    }
   });
 }
 

@@ -8,6 +8,7 @@ interface Card {
   description: string;
   tags: string[];
   columnId: string;
+  linkedPages?: { pageId: string; pageTitle: string }[];
 }
 
 interface ColumnDef {
@@ -35,7 +36,7 @@ const DEFAULT_TAGS: TagDef[] = [
 ];
 
 export function BoardView() {
-  const { pages, activePageId, updatePageContent, projects } = useProjectStore() as any;
+  const { pages, activePageId, updatePageContent, projects, setActivePage } = useProjectStore() as any;
   const activePage = pages.find((p: any) => p.id === activePageId);
   const project = projects.find((p: any) => p.id === activePage?.project_id);
   const projectTags: { name: string; color: string }[] = project?.settings?.projectTags || [];
@@ -58,6 +59,8 @@ export function BoardView() {
   const [editDetailDesc, setEditDetailDesc] = useState('');
   const [editDetailTags, setEditDetailTags] = useState('');
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [showLinkPageSearch, setShowLinkPageSearch] = useState(false);
+  const [linkPageSearch, setLinkPageSearch] = useState('');
   const [sortBy, setSortBy] = useState<'default' | 'tags'>('default');
   const [showSort, setShowSort] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
@@ -740,6 +743,40 @@ export function BoardView() {
     setEditingCardId(null);
   };
 
+  // ── Linked pages helpers ──
+
+  const linkPageToCard = (cardId: string, pageId: string, pageTitle: string) => {
+    const updated = cards.map(c => {
+      if (c.id !== cardId) return c;
+      const existing = c.linkedPages || [];
+      if (existing.some(lp => lp.pageId === pageId)) return c; // already linked
+      return { ...c, linkedPages: [...existing, { pageId, pageTitle }] };
+    });
+    saveCards(updated);
+  };
+
+  const unlinkPageFromCard = (cardId: string, pageId: string) => {
+    const updated = cards.map(c => {
+      if (c.id !== cardId) return c;
+      return { ...c, linkedPages: (c.linkedPages || []).filter(lp => lp.pageId !== pageId) };
+    });
+    saveCards(updated);
+  };
+
+  // Pages available to link (all project pages except the current board page)
+  const linkablePages = useMemo(() => {
+    if (!project) return [];
+    return pages
+      .filter((p: any) => p.project_id === project.id && p.id !== activePageId && p.type !== 'dashboard')
+      .map((p: any) => ({ id: p.id, title: p.title || 'Untitled', icon: p.icon || 'description' }));
+  }, [pages, project, activePageId]);
+
+  const filteredLinkablePages = useMemo(() => {
+    if (!linkPageSearch.trim()) return linkablePages;
+    const q = linkPageSearch.toLowerCase();
+    return linkablePages.filter(p => p.title.toLowerCase().includes(q));
+  }, [linkablePages, linkPageSearch]);
+
   // ── Card reorder helpers ──
 
   const reorderCards = useCallback((
@@ -1013,6 +1050,38 @@ export function BoardView() {
                           </div>
                         </div>
                       )}
+                      {/* Linked Pages badges */}
+                      {card.linkedPages && card.linkedPages.length > 0 && (
+                        <div className="px-3 pb-3 pt-1.5" style={{ backgroundColor: `${col.color}04` }}>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {card.linkedPages.slice(0, 2).map(lp => (
+                              <button
+                                key={lp.pageId}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const p = pages.find((pg: any) => pg.id === lp.pageId);
+                                  if (p) {
+                                    setActivePage(lp.pageId);
+                                    setShowCardDetail(null);
+                                  }
+                                }}
+                                className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-medium leading-tight transition-all hover:opacity-80"
+                                style={{ backgroundColor: `${col.color}15`, color: col.color }}
+                                title={`Open ${lp.pageTitle}`}
+                              >
+                                <span className="material-symbols-outlined text-[10px]">article</span>
+                                <span className="max-w-[80px] truncate">{lp.pageTitle}</span>
+                              </button>
+                            ))}
+                            {card.linkedPages.length > 2 && (
+                              <span className="text-[9px] text-on-surface-variant/50 flex items-center gap-0.5">
+                                <span className="material-symbols-outlined text-[10px]">link</span>
+                                +{card.linkedPages.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       {/* Delete button */}
                       <Tooltip label="Delete card">
                         <button
@@ -1282,6 +1351,96 @@ export function BoardView() {
                         ))}
                       </div>
                     )}
+                    {/* ── Linked Pages Section ── */}
+                    <div className="mt-4 pt-3 border-t border-outline/10">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[10px] text-on-surface-variant/50 font-medium uppercase tracking-wider flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[12px]">link</span>
+                          Linked Pages
+                        </p>
+                        <button
+                          onClick={() => { setShowLinkPageSearch(!showLinkPageSearch); setLinkPageSearch(''); }}
+                          className="p-1 rounded-lg text-on-surface-variant/50 hover:text-primary hover:bg-primary/10 transition-all"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">add_link</span>
+                        </button>
+                      </div>
+                      {showLinkPageSearch && (
+                        <div className="mb-2 space-y-1">
+                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface/50 border border-outline/20">
+                            <span className="material-symbols-outlined text-[12px] text-on-surface-variant/50">search</span>
+                            <input
+                              type="text"
+                              value={linkPageSearch}
+                              onChange={e => setLinkPageSearch(e.target.value)}
+                              placeholder="Search pages to link..."
+                              className="flex-1 bg-transparent outline-none text-xs text-on-surface placeholder:text-on-surface-variant/30"
+                              autoFocus
+                            />
+                          </div>
+                          <div className="max-h-36 overflow-y-auto space-y-0.5">
+                            {filteredLinkablePages.length === 0 ? (
+                              <p className="text-[10px] text-on-surface-variant/30 italic px-1 py-1">No pages found</p>
+                            ) : (
+                              filteredLinkablePages.map(p => {
+                                const alreadyLinked = (card.linkedPages || []).some(lp => lp.pageId === p.id);
+                                return (
+                                  <button
+                                    key={p.id}
+                                    onClick={() => {
+                                      if (!alreadyLinked) {
+                                        linkPageToCard(card.id, p.id, p.title);
+                                        setShowLinkPageSearch(false);
+                                      }
+                                    }}
+                                    disabled={alreadyLinked}
+                                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-xs transition-all ${
+                                      alreadyLinked
+                                        ? 'text-on-surface-variant/30 cursor-not-allowed'
+                                        : 'text-on-surface hover:bg-primary/10 hover:text-primary'
+                                    }`}
+                                  >
+                                    <span className="material-symbols-outlined text-[12px]">{p.icon}</span>
+                                    <span className="truncate flex-1">{p.title}</span>
+                                    {alreadyLinked && <span className="text-[9px] text-primary/50">Linked</span>}
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {(card.linkedPages || []).length === 0 ? (
+                        <p className="text-[10px] text-on-surface-variant/30 italic">No linked pages</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {(card.linkedPages || []).map(lp => (
+                            <div key={lp.pageId} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-primary/5 hover:bg-primary/10 transition-all group/link">
+                              <button
+                                onClick={() => {
+                                  const p = pages.find((pg: any) => pg.id === lp.pageId);
+                                  if (p) {
+                                    setActivePage(lp.pageId);
+                                    setShowCardDetail(null);
+                                  }
+                                }}
+                                className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+                              >
+                                <span className="material-symbols-outlined text-[12px] text-primary/70">article</span>
+                                <span className="text-xs text-on-surface truncate">{lp.pageTitle}</span>
+                              </button>
+                              <button
+                                onClick={() => unlinkPageFromCard(card.id, lp.pageId)}
+                                className="p-0.5 rounded text-on-surface-variant/30 hover:text-error hover:bg-error/10 transition-all opacity-0 group-hover/link:opacity-100"
+                                title="Unlink page"
+                              >
+                                <span className="material-symbols-outlined text-[12px]">close</span>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

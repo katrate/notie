@@ -16,11 +16,13 @@ interface DownloadProgress {
 
 interface ElectronAPI {
   // File operations
-  openFileDialog(options: { multiple?: boolean; title?: string }): Promise<string[]>
+  openFileDialog(options: { multiple?: boolean; title?: string; filters?: { name: string; extensions: string[] }[] }): Promise<string[]>
   attachFile(sourcePath: string): Promise<{ name: string; size: number }>
   fileExists(filePath: string): Promise<boolean>
   openPath(filePath: string): Promise<void>
   resolveAttachmentPath(storedName: string): Promise<string>
+  convertToPdf(sourcePath: string): Promise<{ name: string; size?: number; originalName?: string; error?: string }>
+  deleteAttachment(storedName: string): Promise<{ success: boolean }>
 
   // Auto-update
   checkForUpdates(): Promise<{ result?: any; error?: string }>

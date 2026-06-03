@@ -23,6 +23,7 @@ const ALL_PAGE_TYPES = [
   { type: 'audio', label: 'Audio', icon: 'mic' },
   { type: 'video', label: 'Video', icon: 'videocam' },
   { type: 'file', label: 'Files', icon: 'description' },
+  { type: 'pdf', label: 'PDF', icon: 'picture_as_pdf' },
 ];
 
 interface CreatePagePanelProps {

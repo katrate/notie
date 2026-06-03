@@ -1567,7 +1567,8 @@ export function Sidebar() {
                           { type: 'canvas', label: 'Canvas', icon: 'gesture' },
                           { type: 'audio', label: 'Audio', icon: 'mic' },
                           { type: 'video', label: 'Video', icon: 'videocam' },
-                          { type: 'file', label: 'Files', icon: 'description' }
+                          { type: 'file', label: 'Files', icon: 'description' },
+                          { type: 'pdf', label: 'PDF', icon: 'picture_as_pdf' }
                         ].filter(pt => pt.type !== 'dashboard' || !pages.some(pg => pg.project_id === p.id && pg.type === 'dashboard')).map(pt => (
                           <Tooltip key={pt.type} label={`Add ${pt.label}`}>
                           <button
@@ -1850,6 +1851,7 @@ const STANDALONE_PAGE_TYPES = [
   { type: 'audio', label: 'Audio', icon: 'mic' },
   { type: 'video', label: 'Video', icon: 'videocam' },
   { type: 'file', label: 'Files', icon: 'description' },
+  { type: 'pdf', label: 'PDF', icon: 'picture_as_pdf' },
 ];
 
 /** Button to create a new standalone page with any type */

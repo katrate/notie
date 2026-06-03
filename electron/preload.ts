@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // File operations
-  openFileDialog: (options: { multiple?: boolean; title?: string }) =>
+  openFileDialog: (options: { multiple?: boolean; title?: string; filters?: { name: string; extensions: string[] }[] }) =>
     ipcRenderer.invoke('dialog:openFile', options),
   attachFile: (sourcePath: string) =>
     ipcRenderer.invoke('file:attach', sourcePath),
@@ -12,6 +12,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('file:openPath', filePath),
   resolveAttachmentPath: (storedName: string) =>
     ipcRenderer.invoke('file:resolveAttachmentPath', storedName),
+  convertToPdf: (sourcePath: string) =>
+    ipcRenderer.invoke('file:convertToPdf', sourcePath),
+  deleteAttachment: (storedName: string) =>
+    ipcRenderer.invoke('file:deleteAttachment', storedName),
 
   // Auto-update
   checkForUpdates: () =>
