@@ -774,7 +774,7 @@ export function BoardView() {
   const filteredLinkablePages = useMemo(() => {
     if (!linkPageSearch.trim()) return linkablePages;
     const q = linkPageSearch.toLowerCase();
-    return linkablePages.filter(p => p.title.toLowerCase().includes(q));
+    return linkablePages.filter((p: any) => p.title.toLowerCase().includes(q));
   }, [linkablePages, linkPageSearch]);
 
   // ── Card reorder helpers ──
@@ -1382,7 +1382,7 @@ export function BoardView() {
                             {filteredLinkablePages.length === 0 ? (
                               <p className="text-[10px] text-on-surface-variant/30 italic px-1 py-1">No pages found</p>
                             ) : (
-                              filteredLinkablePages.map(p => {
+                              filteredLinkablePages.map((p: any) => {
                                 const alreadyLinked = (card.linkedPages || []).some(lp => lp.pageId === p.id);
                                 return (
                                   <button
