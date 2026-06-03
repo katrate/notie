@@ -6,8 +6,9 @@ import { pdfjs, Document as PdfDoc, Page } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
-// Configure pdf.js worker — use local copy bundled in public/
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
+// Configure pdf.js worker — use bundled copy from react-pdf's pdfjs-dist (v5.4.296)
+// The file is in public/ and works with both dev server and Electron's file:// protocol
+pdfjs.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs'
 
 /* ── Types ── */
 
@@ -19,6 +20,14 @@ interface Highlight {
   note?: string
   text?: string
   captureScale?: number
+}
+
+interface OcrWord {
+  text: string
+  x: number  // PDF point coords (US Letter 612x792)
+  y: number
+  w: number
+  h: number
 }
 
 interface PdfFileState {
@@ -85,6 +94,8 @@ export function PdfView() {
   const [highlightHistory, setHighlightHistory] = useState<Highlight[][]>([])
   const [isConverting, setIsConverting] = useState(false)
   const [convertStatus, setConvertStatus] = useState('')
+  const [ocrWords, setOcrWords] = useState<OcrWord[]>([])
+  const [sourceFormat, setSourceFormat] = useState<string | undefined>(undefined)
   const highlightHistoryRef = useRef<Highlight[][]>([])
   const searchInputRef = useRef<HTMLInputElement>(null)
   const pageContainerRef = useRef<HTMLDivElement>(null)
@@ -100,10 +111,14 @@ export function PdfView() {
       if (content.pageNumber) setPageNumber(content.pageNumber)
       if (content.scale) setScale(content.scale)
       if (content.rotation) setRotation(content.rotation)
+      if (content.ocrWords) setOcrWords(content.ocrWords)
+      if (content.sourceFormat) setSourceFormat(content.sourceFormat)
     } else {
       setPdfFile(null)
       setHighlights([])
       setHighlightHistory([])
+      setOcrWords([])
+      setSourceFormat(undefined)
       setNumPages(0)
       setPageNumber(1)
       setScale(1.0)
@@ -123,10 +138,10 @@ export function PdfView() {
   }
 
   // ── Open PDF from system ──
-  const IMAGE_FORMATS = ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'tiff', 'tif', 'webp', 'svg', 'ico']
-  const OFFICE_FORMATS = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'csv', 'rtf']
+  const IMAGE_FORMATS = ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'tiff', 'tif', 'webp', 'svg', 'ico', 'psd']
+  const OFFICE_FORMATS = ['doc', 'docx', 'xls', 'xlsx', 'xlxs', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'csv', 'rtf']
   const TEXT_FORMATS = ['txt', 'xml', 'html', 'htm', 'css', 'js', 'ts', 'jsx', 'tsx', 'json', 'md', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'log', 'bat', 'sh', 'ps1']
-  const OTHER_FORMATS = ['psd', 'ai', 'eps', 'ps', 'prn', 'indd']
+  const OTHER_FORMATS = ['ai', 'eps', 'ps', 'prn', 'indd']
   const ALL_FORMATS = ['pdf', ...IMAGE_FORMATS, ...OFFICE_FORMATS, ...TEXT_FORMATS, ...OTHER_FORMATS]
 
   const handleOpenPdf = async () => {
@@ -157,7 +172,7 @@ export function PdfView() {
       setIsConverting(true)
       setConvertStatus(`Opening ${origName}...`)
 
-      let pdfResult: { name: string; size?: number; originalName?: string; error?: string }
+      let pdfResult: { name: string; size?: number; originalName?: string; error?: string; ocrWords?: OcrWord[]; sourceFormat?: string }
 
       if (ext === 'pdf') {
         // Direct PDF — just attach
@@ -193,6 +208,8 @@ export function PdfView() {
       setScale(1.0)
       setRotation(0)
       setHighlights([])
+      setOcrWords(pdfResult.ocrWords || [])
+      setSourceFormat(pdfResult.sourceFormat)
       highlightHistoryRef.current = []
       setHighlightHistory([])
       setNumPages(0)
@@ -202,11 +219,12 @@ export function PdfView() {
       saveState({
         pdfFile: newFile,
         highlights: [],
+        ocrWords: pdfResult.ocrWords || [],
+        sourceFormat: pdfResult.sourceFormat || (ext !== 'pdf' ? ext : undefined),
+        sourceName: ext !== 'pdf' ? origName : undefined,
         pageNumber: 1,
         scale: 1.0,
         rotation: 0,
-        sourceFormat: ext !== 'pdf' ? ext : undefined,
-        sourceName: ext !== 'pdf' ? origName : undefined,
       })
       useToastStore.getState().toast(`Opened "${origName}"`, 'success')
     } catch (err) {
@@ -693,6 +711,18 @@ export function PdfView() {
         </Tooltip>
       </div>
 
+      {/* ── Format warning banner ── */}
+      {sourceFormat && (
+        <div className="mx-3 mt-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-2">
+          <span className="material-symbols-outlined text-[14px] text-amber-400 mt-0.5 flex-shrink-0">info</span>
+          <p className="text-[11px] text-amber-300/80 leading-relaxed">
+            This document was converted from <strong className="text-amber-200 uppercase">{sourceFormat}</strong>.
+            Some formatting, layout, or images may not perfectly match the original.
+            For best results, open the original file in its native application.
+          </p>
+        </div>
+      )}
+
       {/* ── Main content ── */}
       <div className="flex-1 flex min-h-0">
         {/* ── Sidebar ── */}
@@ -825,6 +855,35 @@ export function PdfView() {
                   className="!bg-white"
                   width={undefined}
                 />
+                {/* OCR text overlays (invisible selectable text for images) */}
+                {ocrWords.length > 0 && (
+                  <div className="absolute inset-0 pointer-events-none" style={{ userSelect: 'text' }}>
+                    {ocrWords.map((word, i) => (
+                      <span
+                        key={i}
+                        className="ocr-word"
+                        style={{
+                          position: 'absolute',
+                          left: word.x * scale,
+                          top: word.y * scale,
+                          width: word.w * scale,
+                          height: word.h * scale,
+                          color: 'transparent',
+                          pointerEvents: 'auto',
+                          userSelect: 'text',
+                          cursor: 'text',
+                          overflow: 'hidden',
+                          whiteSpace: 'nowrap',
+                          fontSize: Math.max(word.h * scale * 0.85, 4),
+                          fontFamily: 'sans-serif',
+                          lineHeight: word.h * scale + 'px',
+                        }}
+                      >
+                        {word.text}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {/* Highlights overlay */}
                 {currentPageHighlights.map(h => {
                   const ratio = scale / (h.captureScale ?? 1)

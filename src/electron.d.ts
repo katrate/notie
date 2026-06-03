@@ -21,7 +21,7 @@ interface ElectronAPI {
   fileExists(filePath: string): Promise<boolean>
   openPath(filePath: string): Promise<void>
   resolveAttachmentPath(storedName: string): Promise<string>
-  convertToPdf(sourcePath: string): Promise<{ name: string; size?: number; originalName?: string; error?: string }>
+  convertToPdf(sourcePath: string): Promise<{ name: string; size?: number; originalName?: string; error?: string; ocrWords?: { text: string; x: number; y: number; w: number; h: number }[]; sourceFormat?: string }>
   deleteAttachment(storedName: string): Promise<{ success: boolean }>
 
   // Auto-update

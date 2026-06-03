@@ -1,7 +1,6 @@
-import { useEffect, useState, useRef, useLayoutEffect, Fragment } from 'react';
+import { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useProjectStore } from '../../stores/projectStore';
-import { useCommandStore } from '../../stores/commandStore';
 import { DocumentEditor } from './DocumentEditor';
 import { EditableTable } from './EditableTable';
 import { BoardView } from './BoardView';
@@ -20,8 +19,6 @@ import { LinkPageDropdown } from './LinkPageDropdown';
 import { CreatePagePanel } from '../layout/CreatePagePanel';
 
 import { Tooltip } from '../Tooltip';
-import { platformShortcut } from '../../stores/shortcutStore';
-import { SettingsModal } from '../settings/SettingsModal';
 import { EditorSkeleton } from '../ui/Skeleton';
 import { TemplateActions } from './TemplateActions';
 
@@ -43,7 +40,7 @@ export function CenterWorkspace() {
         const [editorInstance, setEditorInstance] = useState<any>(null);
        const [pageTitleDraft, setPageTitleDraft] = useState('');
        const [pageTitleError, setPageTitleError] = useState('');
-       const iconOptions = ['article', 'grid_on', 'dashboard', 'bar_chart', 'checklist', 'photo_library', 'storage', 'code', 'public', 'folder', 'menu_book', 'star', 'favorite', 'gesture', 'draw', 'brush', 'mic', 'videocam', 'folder'];
+       const iconOptions = ['article', 'grid_on', 'dashboard', 'bar_chart', 'checklist', 'photo_library', 'storage', 'code', 'public', 'folder', 'menu_book', 'star', 'favorite', 'settings', 'group', 'school', 'palette', 'gesture', 'draw', 'brush', 'mic', 'videocam', 'folder'];
       
       // Icon mapping – using Material Symbols (you can replace with any icon library you prefer)
 
@@ -176,9 +173,8 @@ export function CenterWorkspace() {
 
      return (
         <div className="flex-1 flex flex-col h-full overflow-hidden">
-          <HeaderBar />
-
-         {/* Main content area */}          <main className="flex-1 overflow-y-auto relative flex flex-col">
+          {/* Main content area */}
+          <main className="flex-1 overflow-y-auto relative flex flex-col">
            {/* For canvas: compact header + full-width canvas */}
            {activePage?.type === 'canvas' ? (
              <>
@@ -219,7 +215,8 @@ export function CenterWorkspace() {
                      <input
                        type="text"
                        value={pageTitleDraft}
-                       onChange={(e) => { setPageTitleDraft(e.target.value); setPageTitleError(''); }}                         onBlur={() => {
+                       onChange={(e) => { setPageTitleDraft(e.target.value); setPageTitleError(''); }}
+                       onBlur={() => {
                              if (!activePageId) return;
                              const trimmed = pageTitleDraft.trim();
                              if (!trimmed) { setPageTitleDraft(activePage?.title || ''); return; }
@@ -537,135 +534,4 @@ function GraphEditorBridge({ editorInstance }: { editorInstance: any }) {
   }, [editorInstance, setGraphEditorInsert]);
 
   return null;
-}
-
-/** Shared header bar with breadcrumbs */
-function HeaderBar() {
-  const projects = useProjectStore(s => s.projects);
-  const pages = useProjectStore(s => s.pages);
-  const activeProjectId = useProjectStore(s => s.activeProjectId);
-  const activePageId = useProjectStore(s => s.activePageId);
-  const viewMode = useProjectStore(s => s.viewMode);
-  const setViewMode = useProjectStore(s => s.setViewMode);
-  const setActivePage = useProjectStore(s => s.setActivePage);
-
-  const activeProject = projects.find(p => p.id === activeProjectId);
-  const activePage = pages.find(p => p.id === activePageId);
-
-  return (
-    <>
-      <header className="h-14 border-b border-outline/10 flex items-center px-6 justify-between backdrop-blur-md bg-surface/30 sticky top-0 z-10 gap-4">
-        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto whitespace-nowrap hide-scrollbar">
-          <span className="text-on-surface-variant text-sm flex-shrink-0">Projects</span>
-          {activeProject && (
-            <>
-              <span className="material-symbols-outlined text-[14px] text-on-surface-variant flex-shrink-0">chevron_right</span>
-              <span className="text-on-surface text-sm font-medium flex-shrink-0">{activeProject.name}</span>
-            </>
-          )}
-          {!activeProject && activePage && (
-            <>
-              <span className="material-symbols-outlined text-[14px] text-on-surface-variant flex-shrink-0">chevron_right</span>
-              <span className="text-on-surface-variant text-sm flex-shrink-0">Standalone</span>
-            </>
-          )}
-          {activePage && (() => {
-            const breadcrumbs = [];
-            let current: any = activePage;
-            while (current) {
-              breadcrumbs.unshift(current);
-              current = pages.find(p => p.id === current?.metadata?.parentId);
-            }
-            return breadcrumbs.map((crumb, index) => (
-              <Fragment key={crumb.id}>
-                <span className="material-symbols-outlined text-[14px] text-on-surface-variant flex-shrink-0">chevron_right</span>
-                <button
-                  onClick={() => setActivePage(crumb.id)}
-                  className={`text-sm hover:text-primary transition-colors flex-shrink-0 truncate max-w-[150px] ${index === breadcrumbs.length - 1 ? 'text-on-surface font-medium' : 'text-on-surface-variant'}`}
-                >
-                  {crumb.title}
-                </button>
-              </Fragment>
-            ));
-          })()}
-        </div>
-
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <div className="flex items-center bg-surface-variant/30 border border-outline/5 rounded-full p-0.5 shadow-inner">
-            {/* View mode toggle — hidden for standalone pages */}
-            {activeProjectId && (
-              <>
-                <Tooltip label="Editor only" shortcut={platformShortcut('Ctrl+Alt+V')} position="bottom">
-                <button
-                  onClick={() => setViewMode('editor')}
-                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${viewMode === 'editor' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'}`}
-                >
-                  <span className="material-symbols-outlined text-[14px]">edit</span>
-                </button>
-                </Tooltip>
-                <Tooltip label="Editor and Graph" shortcut={platformShortcut('Ctrl+Alt+V')} position="bottom">
-                <button
-                  onClick={() => setViewMode('both')}
-                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${viewMode === 'both' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'}`}
-                >
-                  <span className="material-symbols-outlined text-[14px]">view_sidebar</span>
-                </button>
-                </Tooltip>
-                <Tooltip label="Graph only" shortcut={platformShortcut('Ctrl+Alt+V')} position="bottom">
-                <button
-                  onClick={() => setViewMode('graph')}
-                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${viewMode === 'graph' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'}`}
-                >
-                  <span className="material-symbols-outlined text-[14px]">grain</span>
-                </button>
-                </Tooltip>
-              </>
-            )}
-            {/* Toggle left panel */}
-            <SidebarToggleButton />
-          </div>
-        </div>
-      </header>
-      {/* Command-store triggered settings modal */}
-      <SettingsModalBridge />
-    </>
-  );
-}
-
-/** Toggle button to show/hide the left sidebar */
-function SidebarToggleButton() {
-  const sidebarVisible = useProjectStore(s => s.sidebarVisible);
-  const setSidebarVisible = useProjectStore(s => s.setSidebarVisible);
-
-  return (
-    <Tooltip label={sidebarVisible ? 'Hide sidebar' : 'Show sidebar'} shortcut={platformShortcut('Ctrl+\\')} position="bottom">
-      <button
-        onClick={() => setSidebarVisible(!sidebarVisible)}
-        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-          sidebarVisible
-            ? 'text-on-surface-variant hover:bg-surface-variant'
-            : 'bg-primary text-on-primary shadow-sm'
-        }`}
-      >
-        <span className="material-symbols-outlined text-[14px]">
-          {sidebarVisible ? 'menu_open' : 'menu'}
-        </span>
-      </button>
-    </Tooltip>
-  );
-}
-
-/** Bridge that listens for command-store signal to open the settings modal */
-function SettingsModalBridge() {
-  const { openSettingsModal, setOpenSettingsModal } = useCommandStore()
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (openSettingsModal) {
-      setOpen(true)
-      setOpenSettingsModal(false)
-    }
-  }, [openSettingsModal, setOpenSettingsModal])
-
-  return open ? <SettingsModal onClose={() => setOpen(false)} /> : null
 }
