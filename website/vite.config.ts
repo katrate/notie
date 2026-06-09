@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig(async () => {
-  let appVersion = "v0.1.1"; // fallback
+  let appVersion = "v0.1.0"; // fallback
   try {
     const res = await fetch("https://api.github.com/repos/katrate/notie/releases/latest");
     const data = await res.json();

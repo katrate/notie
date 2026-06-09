@@ -1,117 +1,86 @@
-import { useState, FormEvent } from "react";
+import { useState } from 'react'
 
 export function Feedback() {
-  const [sent, setSent] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setSending(true);
-    const form = e.currentTarget;
-    const data = new FormData(form);
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setSending(true)
+    const form = e.currentTarget
+    const data = new FormData(form)
     try {
-      await fetch("https://formsubmit.co/ajax/my494stry@gmail.com", {
-        method: "POST",
+      await fetch('https://formsubmit.co/ajax/katrate@proton.me', {
+        method: 'POST',
         body: data,
-      });
-      setSent(true);
-      form.reset();
+      })
+      setSent(true)
     } catch {
-      // fallback: mailto
-      const name = data.get("name");
-      const email = data.get("email");
-      const type = data.get("type");
-      const message = data.get("message");
-      window.location.href = `mailto:my494stry@gmail.com?subject=${encodeURIComponent(`[Notie Feedback] ${type} from ${name}`)}&body=${encodeURIComponent(`From: ${name} (${email})\n\n${message}`)}`;
+      const name = data.get('name') || 'User'
+      const message = data.get('message') || ''
+      window.open(`mailto:katrate@proton.me?subject=Notie%20Website%20Feedback&body=${encodeURIComponent(String(message))}`)
+      setSent(true)
     }
-    setSending(false);
-  };
+    setSending(false)
+  }
+
+  if (sent) {
+    return (
+      <section className="feedback" id="feedback">
+        <div className="container">
+          <div className="section-header">
+            <h2>Thank You!</h2>
+            <p>Your feedback helps make Notie better.</p>
+          </div>
+          <div className="feedback-card feedback-success">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+            <h3>Message Sent!</h3>
+            <p>We'll review your feedback and get back to you if needed.</p>
+            <button className="btn btn-primary" onClick={() => setSent(false)}>Send Another</button>
+          </div>
+        </div>
+      </section>
+    )
+  }
 
   return (
-    <section className="section" id="feedback" style={{ padding: "60px 0 80px" }}>
+    <section className="feedback" id="feedback">
       <div className="container">
         <div className="section-header">
           <h2>Send Feedback</h2>
-          <p>Suggestions, bug reports, or just say hello — we read everything.</p>
+          <p>Have a suggestion or found a bug? Let us know!</p>
         </div>
-        <div style={{ maxWidth: 520, margin: "0 auto" }}>
-          {sent ? (
-            <div style={{
-              textAlign: "center",
-              padding: "40px",
-              background: "var(--bg-card)",
-              borderRadius: "var(--radius-lg)",
-              border: "1px solid var(--border)",
-            }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>✉️</div>
-              <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Thanks!</h3>
-              <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>Your message has been sent. We'll review it shortly.</p>
-              <button className="btn btn-secondary" style={{ marginTop: 20 }} onClick={() => setSent(false)}>Send another</button>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <input type="hidden" name="_subject" value="Notie Website Feedback" />
-              <input type="hidden" name="_captcha" value="false" />
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <label style={labelStyle}>Your Name</label>
-                  <input name="name" required style={inputStyle} placeholder="John Doe" />
-                </div>
-                <div>
-                  <label style={labelStyle}>Your Email</label>
-                  <input name="email" type="email" required style={inputStyle} placeholder="john@example.com" />
-                </div>
-              </div>
-
-              <div>
-                <label style={labelStyle}>Type</label>
-                <select name="type" required style={inputStyle}>
-                  <option value="">Select a category</option>
-                  <option value="Suggestion">💡 Suggestion</option>
-                  <option value="Bug Report">🐛 Bug Report</option>
-                  <option value="Feature Request">✨ Feature Request</option>
-                  <option value="Other">📝 Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={labelStyle}>Message</label>
-                <textarea name="message" required rows={5} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} placeholder="Tell us what's on your mind..." />
-              </div>
-
-              <button type="submit" disabled={sending} className="btn btn-primary" style={{ justifyContent: "center", marginTop: 4 }}>
-                {sending ? "Sending..." : "Send Feedback"}
-              </button>
-
-              <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 4 }}>
-                Your email will only be used to respond to your feedback.
-              </p>
-            </form>
-          )}
-        </div>
+        <form className="feedback-card" onSubmit={handleSubmit}>
+          <input type="hidden" name="_subject" value="Notie Website Feedback" />
+          <input type="hidden" name="_captcha" value="false" />
+          <div style={{ marginBottom: 16 }}>
+            <label htmlFor="name">Name</label>
+            <input id="name" name="name" type="text" placeholder="Your name" required />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label htmlFor="email">Email</label>
+            <input id="email" name="email" type="email" placeholder="you@example.com" required />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label htmlFor="type">Type</label>
+            <select id="type" name="type">
+              <option value="suggestion">Suggestion</option>
+              <option value="bug">Bug Report</option>
+              <option value="feature">Feature Request</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label htmlFor="message">Message</label>
+            <textarea id="message" name="message" placeholder="Tell us what's on your mind..." required></textarea>
+          </div>
+          <button className="btn btn-primary" type="submit" disabled={sending}>
+            {sending ? 'Sending...' : 'Send Feedback'}
+          </button>
+        </form>
       </div>
     </section>
-  );
+  )
 }
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 12,
-  fontWeight: 500,
-  color: "var(--text-secondary)",
-  marginBottom: 6,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 14px",
-  borderRadius: 10,
-  border: "1px solid var(--border)",
-  background: "var(--bg-card)",
-  color: "var(--text)",
-  fontSize: 14,
-  outline: "none",
-  transition: "border-color 0.2s",
-  boxSizing: "border-box",
-};
