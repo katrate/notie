@@ -11,6 +11,7 @@ const PAGE_TYPES = [
   { icon: "audio", name: "Audio", desc: "Voice notes and audio recordings.", screenshot: "audio.png" },
   { icon: "file", name: "File", desc: "File attachments and document storage.", screenshot: "file.png" },
   { icon: "video", name: "Video", desc: "Embed and organize video content.", screenshot: "video.png" },
+  { icon: "pdf", name: "PDF", desc: "View, annotate, and manage PDF documents inline.", screenshot: "pdf.png" },
 ]
 
 const ICONS: Record<string, string> = {
@@ -26,6 +27,7 @@ const ICONS: Record<string, string> = {
   audio: "audio",
   file: "file",
   video: "video",
+  pdf: "picture_as_pdf",
 }
 
 export function PageTypes() {
