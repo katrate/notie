@@ -1,21 +1,14 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import fs from "fs";
 
-export default defineConfig(async () => {
-  let appVersion = "v0.1.0"; // fallback
-  try {
-    const res = await fetch("https://api.github.com/repos/katrate/notie/releases/latest");
-    const data = await res.json();
-    if (data.tag_name) appVersion = data.tag_name;
-  } catch (e) {
-    console.warn("Failed to fetch latest release version, using fallback:", appVersion);
-  }
+const pkg = JSON.parse(fs.readFileSync("./package.json", "utf-8"));
+const appVersion = "v" + pkg.version;
 
-  return {
-    plugins: [react()],
-    define: {
-      __APP_VERSION__: JSON.stringify(appVersion),
-    },
-    base: "/",
-  };
+export default defineConfig({
+  plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
+  base: "/",
 });
