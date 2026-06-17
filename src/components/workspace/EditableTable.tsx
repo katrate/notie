@@ -1898,6 +1898,7 @@ function CellEditor({ col, value, onChange, isPrimary }: { col: TableColumn; val
       chart: 'pie_chart',
       checklist: 'checklist',
       gallery: 'photo_library',
+      timeline: 'timeline',
     };
     const pageTypeLabel: Record<string, string> = {
       text: 'Text',
@@ -1906,8 +1907,9 @@ function CellEditor({ col, value, onChange, isPrimary }: { col: TableColumn; val
       chart: 'Chart',
       checklist: 'Checklist',
       gallery: 'Gallery',
+      timeline: 'Timeline',
     };
-    const pageTypes = ['text', 'table', 'board', 'chart', 'checklist', 'gallery'] as const;
+    const pageTypes = ['text', 'table', 'board', 'chart', 'checklist', 'gallery', 'timeline'] as const;
 
     return (
       <div ref={dropdownRef} className="relative w-full min-h-[40px] flex items-center px-2 py-1 cursor-pointer hover:bg-on-surface/5" onClick={() => setShowDropdown(true)}>

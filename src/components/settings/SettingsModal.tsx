@@ -8,36 +8,10 @@ import { useShortcutStore, SHORTCUT_DEFS, type ShortcutCombo, isMacPlatform } fr
 import { ShortcutCapture } from './ShortcutCapture'
 import {
   useThemeStore,
-  ACCENT_COLORS,
-  DARK_BACKGROUND_OPTIONS,
-  LIGHT_BACKGROUND_OPTIONS,
-  DARK_BACKGROUND_COLORS,
-  LIGHT_BACKGROUND_COLORS,
-  type ThemeMode,
-  type BackgroundColor,
+  CUSTOM_THEMES,
 } from '../../stores/themeStore'
 
 type Tab = 'account' | 'appearance' | 'shortcuts' | 'templates' | 'updates'
-type BGOption = { id: string; label: string; isSolid: boolean }
-
-function getGradientCSS(id: string, theme: ThemeMode): string {
-  if (theme === 'dark') {
-    const map: Record<string, string> = {
-      gradient1: 'linear-gradient(135deg, #0f0f1a, #1a0a2e, #0f0f1a)',
-      gradient2: 'linear-gradient(135deg, #1a0a0a, #2e1a0a, #1a0a1a)',
-      gradient3: 'linear-gradient(135deg, #0a1a0a, #0a2e1a, #0a0f1a)',
-      gradient4: 'linear-gradient(135deg, #0a0a1a, #0a1a2e, #0a0f1a)',
-    }
-    return map[id] || ''
-  }
-  const map: Record<string, string> = {
-    'light-gradient1': 'linear-gradient(135deg, #fef7ff, #f0e6ff, #fef7ff)',
-    'light-gradient2': 'linear-gradient(135deg, #fef7f0, #ffe6cc, #fff0f0)',
-    'light-gradient3': 'linear-gradient(135deg, #f4fff4, #d4f5d4, #eef7ee)',
-    'light-gradient4': 'linear-gradient(135deg, #f0f7ff, #d4e5f5, #eef4fa)',
-  }
-  return map[id] || ''
-}
 
 function SettingsModalContent({ onClose }: { onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<Tab>('account')
@@ -51,53 +25,13 @@ function SettingsModalContent({ onClose }: { onClose: () => void }) {
       window.electronAPI.getAppVersion().then(setAppVersion)
     }
   }, [])
-  const { theme, accentColor, setTheme, setAccentColor } = useThemeStore()
-  const bgStorageKey = `notie-bg-${theme}`
-  const bgSolidKey = `notie-bg-${theme}-solid`
-
-  const BACKGROUND_OPTIONS: BGOption[] = theme === 'dark' ? DARK_BACKGROUND_OPTIONS : LIGHT_BACKGROUND_OPTIONS
-  const BACKGROUND_COLORS: BackgroundColor[] = theme === 'dark' ? DARK_BACKGROUND_COLORS : LIGHT_BACKGROUND_COLORS
-
+  const { customTheme, themeMode, setCustomTheme, setThemeMode } = useThemeStore()
   const [capturingId, setCapturingId] = useState<string | null>(null)
   const { getDisplayString, setShortcut, resetShortcut, resetAll } = useShortcutStore()
-
-  const [background, setBackground] = useState(() => {
-    try { return localStorage.getItem(bgStorageKey) || 'default' } catch { return 'default' }
-  })
-
-  useEffect(() => {
-    const key = `notie-bg-${theme}`
-    setBackground((() => { try { return localStorage.getItem(key) || 'default' } catch { return 'default' } })())
-  }, [theme])
 
   const handleSignOut = async () => {
     await signOut()
     onClose()
-  }
-
-  const handleBackgroundChange = (id: string) => {
-    setBackground(id)
-    try { localStorage.setItem(bgStorageKey, id) } catch {}
-
-    document.body.style.background = ''
-    document.body.style.backgroundColor = ''
-    document.body.style.backgroundImage = ''
-    document.body.style.backgroundAttachment = ''
-
-    if (id === 'default') return
-
-    const gradCSS = getGradientCSS(id, theme)
-    if (gradCSS) {
-      document.body.style.background = gradCSS
-      document.body.style.backgroundAttachment = 'fixed'
-      return
-    }
-
-    const solid = BACKGROUND_COLORS.find(o => o.id === id)
-    if (solid) {
-      document.body.style.backgroundColor = solid.hex
-      try { localStorage.setItem(bgSolidKey, solid.hex) } catch {}
-    }
   }
 
   return (
@@ -229,116 +163,98 @@ function SettingsModalContent({ onClose }: { onClose: () => void }) {
 
           {activeTab === 'appearance' && (
             <div className="space-y-6">
-              {/* Dark / Light toggle */}
+              {/* Custom Themes */}
               <div>
-                <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider mb-3">Theme</p>
-                <div className="flex gap-2">
-                  {(['dark', 'light'] as ThemeMode[]).map((mode) => (
-                    <button
-                      key={mode}
-                      onClick={() => setTheme(mode)}
-                      className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium transition-all ${
-                        theme === mode
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-outline/20 text-on-surface-variant hover:bg-on-surface/5'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[18px]">
-                        {mode === 'dark' ? 'dark_mode' : 'light_mode'}
-                      </span>
-                      {mode === 'dark' ? 'Dark' : 'Light'}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider mb-3">Custom Themes</p>
+                <p className="text-sm text-on-surface-variant/80 mb-4">Choose a custom theme to change the entire look and feel of the app.</p>
 
-              {/* Accent color */}
-              <div>
-                <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider mb-3">Accent Color</p>
-                <div className="flex flex-wrap gap-3">
-                  {ACCENT_COLORS.map((c) => (
-                    <Tooltip key={c.hex} label={c.name} position="bottom">
-                    <button
-                      onClick={() => setAccentColor(c.hex)}
-                    >
-                      <div
-                        className={`w-8 h-8 rounded-full transition-all ${
-                          accentColor === c.hex
-                            ? 'ring-2 ring-on-surface ring-offset-2 ring-offset-surface scale-110'
-                            : 'hover:scale-110'
-                        }`}
-                        style={{ backgroundColor: c.hex }}
-                      />
-                    </button>
-                    </Tooltip>
-                  ))}
-                </div>
-              </div>
-
-              {/* Background */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider">Background</p>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${theme === 'dark' ? 'bg-primary/15 text-primary' : 'bg-amber-500/15 text-amber-500'}`}>
-                    {theme === 'dark' ? 'Dark mode' : 'Light mode'}
-                  </span>
-                </div>
-                {/* Gradients */}
-                <div className="grid grid-cols-5 gap-2 mb-3">
-                  {BACKGROUND_OPTIONS.map((opt) => {
-                    const gradCSS = getGradientCSS(opt.id, theme)
-                    return (
-                      <Tooltip key={opt.id} label={opt.label} position="bottom">
+                {/* Light/Dark mode toggle — only shows when a theme is active */}
+                {customTheme !== 'none' && (
+                  <div className="mb-4 p-3 rounded-xl border border-outline/10 bg-surface-variant/20">
+                    <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider mb-2.5">Theme Mode</p>
+                    <div className="flex gap-1.5">
                       <button
-                        onClick={() => handleBackgroundChange(opt.id)}
-                        className={`aspect-[3/2] rounded-xl border-2 transition-all ${
-                          background === opt.id
-                            ? 'border-primary scale-105'
-                            : 'border-outline/10 hover:border-outline/30'
+                        onClick={() => setThemeMode('dark')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                          themeMode === 'dark'
+                            ? 'bg-primary text-on-primary shadow-sm'
+                            : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/10'
                         }`}
-                        style={gradCSS ? { background: gradCSS } : undefined}
                       >
-                        {opt.id === 'default' && (
-                          <div className="w-full h-full rounded-[10px] bg-surface flex items-center justify-center">
-                            <span className="material-symbols-outlined text-[16px] text-on-surface-variant">grid_view</span>
-                          </div>
-                        )}
+                        <span className="material-symbols-outlined text-[16px]">dark_mode</span>
+                        Dark
                       </button>
-                      </Tooltip>
-                    )
-                  })}
-                </div>
-                <div className="flex flex-wrap gap-1.5 mb-4">
-                  {BACKGROUND_OPTIONS.map((opt) => (
-                    <span
-                      key={opt.id}
-                      className={`text-[10px] px-1.5 py-0.5 rounded ${
-                        background === opt.id ? 'text-primary' : 'text-on-surface-variant'
+                      <button
+                        onClick={() => setThemeMode('light')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                          themeMode === 'light'
+                            ? 'bg-primary text-on-primary shadow-sm'
+                            : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/10'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[16px]">light_mode</span>
+                        Light
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-2">
+                  {CUSTOM_THEMES.map(ct => (
+                    <div
+                      key={ct.id}
+                      className={`rounded-xl border transition-all ${
+                        customTheme === ct.id
+                          ? 'border-primary bg-primary/10'
+                          : 'border-outline/10 bg-surface-variant/20 hover:bg-on-surface/5'
                       }`}
                     >
-                      {opt.label}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Solid Colors */}
-                <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider mb-3">Solid Color</p>
-                <div className="flex flex-wrap gap-2.5">
-                  {BACKGROUND_COLORS.map((c) => (
-                    <Tooltip key={c.id} label={c.label} position="bottom">
-                    <button
-                      onClick={() => handleBackgroundChange(c.id)}
-                    >
-                      <div
-                        className={`w-7 h-7 rounded-full transition-all ${
-                          background === c.id
-                            ? 'ring-2 ring-primary ring-offset-2 ring-offset-surface scale-110'
-                            : 'hover:scale-110'
-                        }`}
-                        style={{ backgroundColor: c.hex }}
-                      />
-                    </button>
-                    </Tooltip>
+                      <button
+                        onClick={() => {
+                          if (customTheme === ct.id) {
+                            setCustomTheme('none');
+                          } else {
+                            setCustomTheme(ct.id);
+                          }
+                        }}
+                        className="w-full flex items-center gap-4 px-4 py-3 text-left"
+                      >
+                        {/* Theme preview */}
+                        <div
+                          className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center text-lg font-bold ${
+                            customTheme === ct.id ? 'bg-primary/20 text-primary' : 'bg-surface text-on-surface-variant'
+                          }`}
+                          style={customTheme === ct.id ? {} : { border: '1px solid rgba(255,255,255,0.1)' }}
+                        >
+                          <span className="material-symbols-outlined text-[20px]">palette</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium ${customTheme === ct.id ? 'text-primary' : 'text-on-surface'}`}>
+                            {ct.name}
+                          </p>
+                          <p className="text-xs text-on-surface-variant/70 mt-0.5">{ct.description}</p>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center ${
+                          customTheme === ct.id
+                            ? 'border-primary bg-primary'
+                            : 'border-outline/30'
+                        }`}>
+                          {customTheme === ct.id && (
+                            <span className="material-symbols-outlined text-[10px] text-white font-bold">check</span>
+                          )}
+                        </div>
+                      </button>
+                      {/* Theme preview swatches */}
+                      {customTheme === ct.id && (
+                        <div className="px-4 pb-3 pt-0 flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-md border border-outline/10" style={{ backgroundColor: ct.previewColors.background }} title="Background" />
+                          <div className="w-5 h-5 rounded-md border border-outline/10" style={{ backgroundColor: ct.previewColors.text }} title="Text" />
+                          <div className="w-5 h-5 rounded-md border border-outline/10" style={{ backgroundColor: ct.previewColors.accent }} title="Accent" />
+                          <div className="w-5 h-5 rounded-md border border-outline/10" style={{ backgroundColor: ct.previewColors.secondary }} title="Secondary" />
+                          <span className="text-[10px] text-on-surface-variant/60 ml-1">{ct.previewColors.background} · {ct.previewColors.text} · {ct.previewColors.accent} · {ct.previewColors.secondary}</span>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>

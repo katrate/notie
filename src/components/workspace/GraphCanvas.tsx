@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useCallback, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
 import { ReactFlow, Background, Controls, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider } from '@xyflow/react';
@@ -7,10 +7,22 @@ import { CustomNode } from './CustomNode';
 import { RowNode } from './RowNode';
 import { ValueNode } from './ValueNode';
 import { PageNode } from './PageNode';
+import { CustomAnimatedEdge } from './CustomAnimatedEdge';
 import dagre from '@dagrejs/dagre';
+import * as d3 from 'd3-force';
 import { Tooltip } from '../Tooltip';
 
 const nodeTypes = { custom: CustomNode, rowNode: RowNode, valueNode: ValueNode, pageNode: PageNode };
+const edgeTypes = { customAnimated: CustomAnimatedEdge };
+
+interface TimeBlock {
+  id: string;
+  title: string;
+  date: string;
+  color: string;
+  description: string;
+  linkedPages?: { pageId: string; pageTitle: string; pageIcon: string }[];
+}
 
 /* Default tag definitions matching BoardView and GalleryView defaults */
 const BOARD_DEFAULT_TAGS: { name: string; color: string }[] = [
@@ -39,6 +51,24 @@ function getContrastColor(hex: string): string {
   const b = parseInt(hex.slice(5, 7), 16);
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   return luminance > 0.5 ? '#000000' : '#ffffff';
+}
+
+/**
+ * Read the --color-primary CSS variable and return it as an rgba string.
+ * Falls back to a soft blue if the variable is not set.
+ */
+function getPrimaryRgba(opacity: number = 0.4): string {
+  if (typeof document === 'undefined') return `rgba(152, 203, 255, ${opacity})`;
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim();
+  if (!color) return `rgba(152, 203, 255, ${opacity})`;
+  // Parse hex color to RGB
+  let hex = color.replace('#', '');
+  if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return `rgba(152, 203, 255, ${opacity})`;
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 }
 
 function getNodeDimensions(id: string, data?: any): { width: number; height: number } {
@@ -122,6 +152,34 @@ function layoutNodesWithDagre(nodes: any[], edges: any[]): any[] {
     }
     return node;
   });
+}
+
+function layoutNodesWithForce(nodes: any[], edges: any[]): any[] {
+  const simNodes = nodes.map(n => {
+    const { width, height } = getNodeDimensions(n.id, n.data);
+    return { ...n, x: n.position.x || 0, y: n.position.y || 0, width, height };
+  });
+  const simEdges = edges.map(e => ({ ...e, source: e.source, target: e.target }));
+
+  const simulation = d3.forceSimulation(simNodes)
+    .force('charge', d3.forceManyBody().strength(-800))
+    .force('link', d3.forceLink(simEdges).id((d: any) => d.id).distance(200))
+    .force('collide', d3.forceCollide().radius((d: any) => Math.max(d.width, d.height) / 2 + 20))
+    .force('center', d3.forceCenter(0, 0))
+    .stop();
+
+  // Run the simulation synchronously for 300 ticks to get a stable layout
+  for (let i = 0; i < 300; ++i) {
+    simulation.tick();
+  }
+
+  return simNodes.map(n => ({
+    ...nodes.find(orig => orig.id === n.id),
+    position: {
+      x: n.x - n.width / 2,
+      y: n.y - n.height / 2,
+    },
+  }));
 }
 
 /**
@@ -338,6 +396,26 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
     };
   }, []);
 
+  // ── Hover path highlighting (DOM-based to avoid re-render flicker) ──
+  const hoverStyleRef = useRef<HTMLStyleElement | null>(null);
+  const hoveredNodeRef = useRef<string | null>(null);
+  const hoverClearTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const edgesRef = useRef<any[]>([]);
+  edgesRef.current = edges;
+
+  // ── Graph connection confirmation popup state ──
+  const [graphLinkConfirm, setGraphLinkConfirm] = useState<{
+    type: 'page-page' | 'timeline-page' | 'page-timeline';
+    source: string;
+    target: string;
+    sourcePageId: string;
+    targetPageId: string;
+    targetTitle: string;
+    targetIcon: string;
+    timelinePageId?: string;
+    blockId?: string;
+  } | null>(null);
+
   // ── Structure version: only changes when pages structurally change ──
   const structureKey = useMemo(() => {
     const projectPages = pages.filter(p => p.project_id === projectId)
@@ -385,14 +463,14 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
       data: { 
         label: project.name, 
         icon: project.icon || 'folder',
-        color: 'bg-primary/30 text-primary border-primary/50 border shadow-[0_0_15px_rgba(152,203,255,0.3)]' 
+        color: 'bg-primary/30 text-primary border-primary/50 border shadow-primary-glow' 
       },
       position: { x: 0, y: 0 },
     });
 
     projectPages.forEach((page) => {
       if (page.type === 'dashboard') return;
-      const defaultIcon = page.type === 'table' ? 'Table2' : page.type === 'board' ? 'LayoutDashboard' : page.type === 'chart' ? 'PieChart' : page.type === 'checklist' ? 'CheckSquare' : page.type === 'gallery' ? 'Images' : page.type === 'folder' ? 'Folder' : 'FileText';
+      const defaultIcon = page.type === 'table' ? 'Table2' : page.type === 'board' ? 'LayoutDashboard' : page.type === 'chart' ? 'PieChart' : page.type === 'checklist' ? 'CheckSquare' : page.type === 'gallery' ? 'Images' : page.type === 'folder' ? 'Folder' : page.type === 'timeline' ? 'Timeline' : 'FileText';
       
       const projectTags: { name: string; color: string }[] = project?.settings?.projectTags || [];
       const pageTags: string[] = page.metadata?.tags || [];
@@ -422,6 +500,9 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
       }
       if (page.type === 'video' && Array.isArray(page.content)) {
         pageSockets.push({ id: 'video', label: 'Clips', count: page.content.length });
+      }
+      if (page.type === 'timeline' && Array.isArray(page.content)) {
+        pageSockets.push({ id: 'timeline', label: 'Blocks', count: page.content.length });
       }
       if (page.type === 'audio' && Array.isArray(page.content)) {
         pageSockets.push({ id: 'audio', label: 'Clips', count: page.content.length });
@@ -457,7 +538,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
         source: sourceId,
         target: `page-${page.id}`,
         animated: true,
-        style: { stroke: 'rgba(152, 203, 255, 0.4)', strokeWidth: 2 },
+        style: { stroke: getPrimaryRgba(0.4), strokeWidth: 2 },
       });          try {
         if ((page.type === 'text' || !page.type) && page.content && typeof page.content === 'object') {
           buildTextSubGraph(page, projectPages, newNodes, newEdges, projectTags);
@@ -471,8 +552,10 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
           buildFileSubGraph(page, newNodes, newEdges);
         } else if (page.type === 'video' && Array.isArray(page.content)) {
           buildMediaSubGraph(page, newNodes, newEdges, 'video');
-        } else if (page.type === 'audio' && Array.isArray(page.content)) {
+        } else  if (page.type === 'audio' && Array.isArray(page.content)) {
           buildMediaSubGraph(page, newNodes, newEdges, 'audio');
+        } else if (page.type === 'timeline' && Array.isArray(page.content)) {
+          buildTimelineSubGraph(page, projectPages, newNodes, newEdges);
         } else if (page.type === 'board' && Array.isArray(page.content)) {
           buildBoardSubGraph(page, projectTags, newNodes, newEdges);
         } else if (page.content) {
@@ -491,6 +574,9 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
     if (graphLayoutMode === 'circular') {
       // Circular layout — computed fresh each time (caching not needed, it's fast)
       laidOutNodes = layoutNodesCircular(newNodes, hierarchyEdges);
+    } else if (graphLayoutMode === 'force') {
+      // Force layout
+      laidOutNodes = layoutNodesWithForce(newNodes, hierarchyEdges);
     } else {
       // Dagre (hierarchy) layout — cached when structure unchanged
       if (dagreLayoutRef.current.key === structureKey) {
@@ -521,7 +607,51 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
       });
     }
 
-    return { nodes: laidOutNodes, edges: newEdges };
+    // ── D1: Grouped / Clustered Nodes with Background Regions ──
+    // Create soft background boxes behind folders and their children
+    const groupNodes: any[] = [];
+    projectPages.filter(p => p.type === 'folder').forEach(folder => {
+      const childrenIds = projectPages.filter(p => p.metadata?.parentId === folder.id).map(p => `page-${p.id}`);
+      if (childrenIds.length === 0) return;
+      
+      const nodeIdsInGroup = [`page-${folder.id}`, ...childrenIds];
+      const nodesInGroup = laidOutNodes.filter(n => nodeIdsInGroup.includes(n.id));
+      if (nodesInGroup.length === 0) return;
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      nodesInGroup.forEach(n => {
+        const x = n.position.x;
+        const y = n.position.y;
+        // approximate width/height if not explicitly set (they might be evaluated later)
+        const w = n.width || 180;
+        const h = n.height || 100;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x + w > maxX) maxX = x + w;
+        if (y + h > maxY) maxY = y + h;
+      });
+
+      const padding = 40;
+      groupNodes.push({
+        id: `group-folder-${folder.id}`,
+        type: 'custom',
+        data: {
+          label: '',
+          icon: '',
+          color: 'bg-primary/5 border border-primary/20 rounded-2xl pointer-events-none',
+        },
+        position: { x: minX - padding, y: minY - padding },
+        style: {
+          width: (maxX - minX) + padding * 2,
+          height: (maxY - minY) + padding * 2,
+          zIndex: -1,
+        },
+        draggable: false,
+        selectable: false,
+      });
+    });
+
+    return { nodes: [...groupNodes, ...laidOutNodes], edges: newEdges };
   }, [project, structureKey]);  // Only depends on project identity + page structure
 
   // ── Debounced viewport save (avoids cascade of re-renders from updateProject) ──
@@ -567,7 +697,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
   // Watch for pendingGraphLink
   useEffect(() => {
     if (!pendingGraphLink) return;
-    const { sourcePageId, targetPageId } = pendingGraphLink;
+    const { sourcePageId, targetPageId, makeChild } = pendingGraphLink;
 
     const edgeId = `edge-linkblock-${sourcePageId}-${targetPageId}`;
     setEdges(eds => {
@@ -581,14 +711,16 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
       }];
     });
 
-    // Auto-parent the target under the source (skip if would create a cycle)
-    const sourcePage = pages.find(p => p.id === sourcePageId);
-    const targetPage = pages.find(p => p.id === targetPageId);
-    if (sourcePage && targetPage) {
-      if (!isAncestor(sourcePageId, targetPageId)) {
-        useProjectStore.getState().updatePage(targetPageId, {
-          metadata: { ...(targetPage.metadata || {}), parentId: sourcePageId, parentedViaLink: true },
-        });
+    // Only auto-parent when makeChild is not explicitly set to false
+    if (makeChild !== false) {
+      const sourcePage = pages.find(p => p.id === sourcePageId);
+      const targetPage = pages.find(p => p.id === targetPageId);
+      if (sourcePage && targetPage) {
+        if (!isAncestor(sourcePageId, targetPageId)) {
+          useProjectStore.getState().updatePage(targetPageId, {
+            metadata: { ...(targetPage.metadata || {}), parentId: sourcePageId, parentedViaLink: true },
+          });
+        }
       }
     }
 
@@ -693,6 +825,136 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
     return false;
   }, []);
 
+  // ── Execute a confirmed graph connection ──
+  const executeGraphLink = useCallback(async (
+    linkType: 'page-page' | 'timeline-page' | 'page-timeline',
+    source: string,
+    target: string,
+    sourcePageId: string,
+    targetPageId: string,
+    targetTitle: string,
+    targetIcon: string,
+    makeChild: boolean,
+    timelinePageId?: string,
+    blockId?: string,
+  ) => {
+    const store = useProjectStore.getState();
+    const { pages, updatePage, updatePageContent } = store;
+    const sourcePage = pages.find(p => p.id === sourcePageId);
+    const targetPage = pages.find(p => p.id === targetPageId);
+
+    if (linkType === 'page-page') {
+      // Check if source page has an active editor — insert via editor to avoid overwriting state
+      const storeState = useProjectStore.getState();
+      const editorInsert = storeState.graphEditorInsert;
+      const isActiveEditor = editorInsert && storeState.activePageId === sourcePageId;
+
+      if (isActiveEditor && sourcePage && (sourcePage.type === 'text' || !sourcePage.type)) {
+        editorInsert!(sourcePageId, targetPageId, targetTitle, targetIcon);
+      } else if (sourcePage && (sourcePage.type === 'text' || !sourcePage.type)) {
+        // Insert page link in source page's content
+        const sourceContent = sourcePage.content || { type: 'doc', content: [] };
+        const contentArray = Array.isArray(sourceContent.content) ? sourceContent.content : [];
+        const alreadyLinked = contentArray.some(
+          (n: any) => n.type === 'pageLinkBlock' && n.attrs?.pageId === targetPageId
+        );
+        if (!alreadyLinked) {
+          const updatedContent = {
+            ...sourceContent,
+            content: [...contentArray, {
+              type: 'pageLinkBlock' as const,
+              attrs: { pageId: targetPageId, pageTitle: targetTitle, pageIcon: targetIcon },
+            }],
+          };
+          await updatePageContent(sourcePageId, updatedContent);
+        }
+      } else if (sourcePage) {
+        const existingLinks: { targetPageId: string }[] = sourcePage.metadata?.links || [];
+        if (!existingLinks.some((l: any) => l.targetPageId === targetPageId)) {
+          await updatePage(sourcePageId, {
+            metadata: {
+              ...(sourcePage.metadata || {}),
+              links: [...existingLinks, { targetPageId, targetTitle, targetIcon }],
+            },
+          });
+        }
+      }
+
+      // Set parentId if user chose Make Child (avoid cycles)
+      if (makeChild && sourcePage && targetPage) {
+        // Check for cycles
+        let currentId = sourcePageId;
+        let isCycle = false;
+        for (let depth = 0; depth < 20; depth++) {
+          const page = pages.find(p => p.id === currentId);
+          if (!page || !page.metadata?.parentId) break;
+          if (page.metadata.parentId === targetPageId) { isCycle = true; break; }
+          currentId = page.metadata.parentId;
+        }
+        if (!isCycle) {
+          await updatePage(targetPageId, {
+            metadata: { ...(targetPage.metadata || {}), parentId: sourcePageId, parentedViaLink: true },
+          });
+        }
+      }
+    }
+
+    if (linkType === 'timeline-page' && timelinePageId && blockId) {
+      const timelinePage = pages.find(p => p.id === timelinePageId);
+      const targetPg = pages.find(p => p.id === targetPageId);
+      if (timelinePage && targetPg && Array.isArray(timelinePage.content)) {
+        const newContent = [...timelinePage.content];
+        const blockIdx = newContent.findIndex((b: any) => b.id === blockId);
+        if (blockIdx !== -1) {
+          const updatedBlock = { ...newContent[blockIdx] };
+          const linkedPages = updatedBlock.linkedPages || [];
+          if (!linkedPages.some((lp: any) => lp.pageId === targetPageId)) {
+            updatedBlock.linkedPages = [
+              ...linkedPages,
+              { pageId: targetPageId, pageTitle: targetTitle, pageIcon: targetIcon },
+            ];
+            newContent[blockIdx] = updatedBlock;
+            await updatePageContent(timelinePageId, newContent);
+          }
+        }
+      }
+    }
+
+    if (linkType === 'page-timeline' && timelinePageId && blockId) {
+      const timelinePage = pages.find(p => p.id === timelinePageId);
+      const sourcePg = pages.find(p => p.id === sourcePageId);
+      if (timelinePage && sourcePg && Array.isArray(timelinePage.content)) {
+        const newContent = [...timelinePage.content];
+        const blockIdx = newContent.findIndex((b: any) => b.id === blockId);
+        if (blockIdx !== -1) {
+          const updatedBlock = { ...newContent[blockIdx] };
+          const linkedPages = updatedBlock.linkedPages || [];
+          if (!linkedPages.some((lp: any) => lp.pageId === sourcePageId)) {
+            updatedBlock.linkedPages = [
+              ...linkedPages,
+              { pageId: sourcePageId, pageTitle: sourcePg.title || 'Untitled', pageIcon: sourcePg.icon || 'description' },
+            ];
+            newContent[blockIdx] = updatedBlock;
+            await updatePageContent(timelinePageId, newContent);
+          }
+        }
+      }
+    }
+
+    // Create the graph edge
+    const edgeId = linkType === 'page-page'
+      ? `edge-linkblock-${sourcePageId}-${targetPageId}`
+      : `edge-timelink-${source}-${target}`;
+    setEdges(eds => {
+      if (eds.some(e => e.id === edgeId)) return eds;
+      return [...eds, {
+        id: edgeId,
+        source, target, animated: true,
+        style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
+      }];
+    });
+  }, [setEdges]);
+
   const onConnect = useCallback(async (connection: any) => {
     const { source, target } = connection;
     if (!source || !target || source === target) return;
@@ -733,8 +995,11 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
         return;
       }
 
+      let handled = false;
+
       // Board card → tag
       if (source.startsWith('boardcard-')) {
+        handled = true;
         const match = source.match(/^boardcard-(.+)-([a-z0-9]+)$/);
         if (match) {
           const [, boardPageId, cardId] = match;
@@ -757,6 +1022,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
 
       // Gallery image → tag
       else if (source.startsWith('img-')) {
+        handled = true;
         const match = source.match(/^img-(.+)-([a-z0-9]+)$/);
         if (match) {
           const [, galleryPageId, itemId] = match;
@@ -779,6 +1045,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
 
       // Table row → tag (adds tags field to the row object)
       else if (source.startsWith('row-')) {
+        handled = true;
         console.log('[Graph] Row→tag connection:', { source, target, tagName });
         const match = source.match(/^row-(.+)-(\d+)$/);
         if (match) {
@@ -811,6 +1078,8 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
           console.log('[Graph] Row regex did NOT match! Source:', source);
         }
       }
+
+      if (!handled) return; // Prevent connecting unsupported nodes to tags
 
       // Create the visual edge in the graph
       const edgeId = `edge-tag-link-${source}-${target}`;
@@ -948,12 +1217,77 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
       return;
     }
 
+    // ── Timeline block → Page: show confirmation popup ──
+    if (source.startsWith('timeblock-') && target.startsWith('page-')) {
+      const match = source.match(/^timeblock-(.+)-(.+)$/);
+      if (match) {
+        const timelinePageId = match[1];
+        const blockId = match[2];
+        const targetPageId = target.replace('page-', '');
+        const targetPage = pages.find(p => p.id === targetPageId);
+        if (!targetPage) return;
+        setGraphLinkConfirm({
+          type: 'timeline-page',
+          source, target,
+          sourcePageId: targetPageId, // reversed — the page is being linked TO the timeline block
+          targetPageId,
+          targetTitle: targetPage.title || 'Untitled',
+          targetIcon: targetPage.icon || 'description',
+          timelinePageId,
+          blockId,
+        });
+      }
+      return;
+    }
+
+    // ── Page → Timeline block: show confirmation popup ──
+    if (source.startsWith('page-') && target.startsWith('timeblock-')) {
+      const sourcePageId = source.replace('page-', '');
+      const match = target.match(/^timeblock-(.+)-(.+)$/);
+      if (match) {
+        const timelinePageId = match[1];
+        const blockId = match[2];
+        const sourcePage = pages.find(p => p.id === sourcePageId);
+        if (!sourcePage) return;
+        setGraphLinkConfirm({
+          type: 'page-timeline',
+          source, target,
+          sourcePageId,
+          targetPageId: sourcePageId,
+          targetTitle: sourcePage.title || 'Untitled',
+          targetIcon: sourcePage.icon || 'description',
+          timelinePageId,
+          blockId,
+        });
+      }
+      return;
+    }
+
+    // ── Page → Page (or other node): show confirmation popup ──
+    if (source.startsWith('page-') && target.startsWith('page-')) {
+      const sourcePageId = source.replace('page-', '');
+      const targetPageId = target.replace('page-', '');
+      const targetPage = pages.find(p => p.id === targetPageId);
+      if (!targetPage) return;
+      setGraphLinkConfirm({
+        type: 'page-page',
+        source, target,
+        sourcePageId,
+        targetPageId,
+        targetTitle: targetPage.title || 'Untitled',
+        targetIcon: targetPage.icon || 'description',
+      });
+      return;
+    }
+
     if (source.startsWith('page-')) {
       const sourcePageId = source.replace('page-', '');
       const sourcePage = pages.find(p => p.id === sourcePageId);
       if (!sourcePage) return;
 
       const targetPageId = target.startsWith('page-') ? target.replace('page-', '') : null;
+      if (!targetPageId) return; // Prevent connecting pages to unsupported non-page nodes
+      
       const targetPage = targetPageId ? pages.find(p => p.id === targetPageId) : null;
       const targetTitle = targetPage?.title || 'Untitled';
       const targetIcon = targetPage?.icon || 'description';
@@ -1003,16 +1337,6 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
         }];
       });
 
-      // Auto-parent: when connecting page-to-page, set target as child of source
-      if (target.startsWith('page-') && targetPageId && sourcePage && targetPage) {
-        if (isAncestor(sourcePageId, targetPageId)) {
-          return;
-        }
-        await updatePage(targetPageId, {
-          metadata: { ...(targetPage.metadata || {}), parentId: sourcePageId, parentedViaLink: true },
-        });
-      }
-
     } else if (source.startsWith('row-')) {
       // Row → target connections: auto-fill matching column cells
       const rowMatch = source.match(/^row-(.+)-(\d+)$/);
@@ -1039,7 +1363,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
         if (fileMatch) {
           const fileItemId = fileMatch[2];
           const attachmentCol = targetColId
-            ? columns.find((c: any) => c.id === targetColId)
+            ? columns.find((c: any) => c.id === targetColId && c.type === 'attachment')
             : columns.find((c: any) => c.type === 'attachment');
           if (attachmentCol) {
             const filePageId = fileMatch[1];
@@ -1060,7 +1384,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
         if (imgMatch) {
           const imageItemId = imgMatch[2];
           const galleryCol = targetColId
-            ? columns.find((c: any) => c.id === targetColId)
+            ? columns.find((c: any) => c.id === targetColId && c.type === 'gallery')
             : columns.find((c: any) => c.type === 'gallery');
           if (galleryCol) {
             const currentVal = row[galleryCol.id] || '';
@@ -1086,7 +1410,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
         if (mediaMatch) {
           const mediaItemId = mediaMatch[2];
           const mediaCol = targetColId
-            ? columns.find((c: any) => c.id === targetColId)
+            ? columns.find((c: any) => c.id === targetColId && c.type === 'media')
             : columns.find((c: any) => c.type === 'media');
           if (mediaCol) {
             const currentVal = row[mediaCol.id] || '';
@@ -1109,7 +1433,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
       } else if (target.startsWith('page-')) {
         const targetPageId = target.replace('page-', '');
         const pageLinkCol = targetColId
-          ? columns.find((c: any) => c.id === targetColId)
+          ? columns.find((c: any) => c.id === targetColId && c.type === 'page link')
           : columns.find((c: any) => c.type === 'page link');
         if (pageLinkCol) {
           const currentVal = row[pageLinkCol.id] || '';
@@ -1237,7 +1561,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
     const p = useProjectStore.getState().projects.find(p => p.id === projectId);
     if (!p) return;
     const currentMode = p.settings?.graphLayoutMode || 'hierarchy';
-    const newMode = currentMode === 'hierarchy' ? 'circular' : 'hierarchy';
+    const newMode = currentMode === 'hierarchy' ? 'circular' : currentMode === 'circular' ? 'force' : 'hierarchy';
     // Clear saved positions so new layout takes full effect
     savedPositionsRef.current = {};
     useProjectStore.getState().updateProject(projectId, {
@@ -1258,6 +1582,120 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
     }
   }, []);
 
+  // ── Hover path highlighting: pure CSS injection (no React re-renders) ──
+  useEffect(() => {
+    return () => {
+      if (hoverStyleRef.current) {
+        hoverStyleRef.current.remove();
+        hoverStyleRef.current = null;
+      }
+    };
+  }, []);
+
+  const onNodeMouseEnter = useCallback((_event: React.MouseEvent, node: any) => {
+    if (hoverClearTimerRef.current) clearTimeout(hoverClearTimerRef.current);
+    if (hoveredNodeRef.current === node.id) return;
+    hoveredNodeRef.current = node.id;
+
+    // Compute connected nodes & edges from ref (no state change)
+    const connNodeIds = new Set<string>([node.id]);
+    const connEdgeIds = new Set<string>();
+
+    edgesRef.current.forEach(e => {
+      if (e.source === node.id || e.target === node.id) {
+        connEdgeIds.add(e.id);
+        connNodeIds.add(e.source);
+        connNodeIds.add(e.target);
+      }
+    });
+
+    // Build scoped CSS selectors
+    const neighborSelectors = Array.from(connNodeIds)
+      .filter(id => id !== node.id)
+      .map(id => `.react-flow__node[data-id="${id}"]`)
+      .join(', ');
+
+    const edgeHighlightSelectors = connEdgeIds.size > 0
+      ? Array.from(connEdgeIds)
+          .map(id => `.graph-hover-active .react-flow__edge[data-id="${id}"]`)
+          .join(', ')
+      : null;
+
+    let css = `
+      .graph-hover-active .react-flow__node {
+        opacity: 0.12 !important;
+        transition: opacity 0.3s ease !important;
+      }
+      .graph-hover-active .react-flow__node[data-id="${node.id}"] {
+        opacity: 1 !important;
+      }
+      .graph-hover-active .react-flow__node[data-id="${node.id}"] > div {
+        box-shadow: 0 0 16px rgba(152, 203, 255, 0.5) !important;
+        border-color: rgba(152, 203, 255, 0.8) !important;
+        transition: box-shadow 0.3s ease, border-color 0.3s ease;
+      }
+      .graph-hover-active .react-flow__edge {
+        opacity: 0.04 !important;
+        transition: opacity 0.3s ease !important;
+      }
+    `;
+
+    if (neighborSelectors) {
+      css += `
+      .graph-hover-active :is(${neighborSelectors}) {
+        opacity: 1 !important;
+      }
+      .graph-hover-active :is(${neighborSelectors}) > div {
+        box-shadow: 0 0 6px rgba(152, 203, 255, 0.25) !important;
+        border-color: rgba(152, 203, 255, 0.4) !important;
+        transition: box-shadow 0.3s ease, border-color 0.3s ease;
+      }
+      `;
+    }
+
+    if (edgeHighlightSelectors) {
+      css += `
+      ${edgeHighlightSelectors} {
+        opacity: 1 !important;
+      }
+      ${edgeHighlightSelectors} path.react-flow__edge-path {
+        filter: drop-shadow(0 0 3px rgba(152, 203, 255, 0.6));
+        stroke-width: 3 !important;
+      }
+      `;
+    }
+
+    // Inject style
+    if (!hoverStyleRef.current) {
+      hoverStyleRef.current = document.createElement('style');
+      hoverStyleRef.current.setAttribute('data-graph-hover', '');
+      document.head.appendChild(hoverStyleRef.current);
+    }
+    hoverStyleRef.current.textContent = css;
+
+    // Activate scoping class on the nearest ReactFlow wrapper
+    const container = (_event.currentTarget as HTMLElement)?.closest('.react-flow') as HTMLElement | null;
+    if (container) container.classList.add('graph-hover-active');
+  }, []);
+
+  const onNodeMouseLeave = useCallback((_event: React.MouseEvent, node: any) => {
+    // Capture container BEFORE timeout
+    const container = (_event.currentTarget as HTMLElement)?.closest('.react-flow') as HTMLElement | null;
+    
+    if (hoverClearTimerRef.current) clearTimeout(hoverClearTimerRef.current);
+    
+    // Defer clearing so that moving between adjacent nodes or inner elements doesn't flash
+    hoverClearTimerRef.current = setTimeout(() => {
+      // Only clear if the user hasn't entered a NEW node in the meantime,
+      // AND they are actually leaving the node we are currently tracking!
+      if (hoveredNodeRef.current !== node.id) return;
+      
+      hoveredNodeRef.current = null;
+      if (hoverStyleRef.current) hoverStyleRef.current.textContent = '';
+      if (container) container.classList.remove('graph-hover-active');
+    }, 100); // 100ms debounce gives plenty of time to cross node boundaries
+  }, []);
+
   return (
     <div style={{ width: '100%', height: '100%' }} className="rounded-lg overflow-hidden relative">        <ReactFlow 
         nodes={nodes} 
@@ -1265,19 +1703,23 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
+        onNodeMouseEnter={onNodeMouseEnter}
+        onNodeMouseLeave={onNodeMouseLeave}
         onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onMoveEnd={onMoveEnd}
         onConnect={onConnect}
         nodeTypes={nodeTypes} 
+        edgeTypes={edgeTypes}
+        connectionRadius={30}
+        connectionLineStyle={{ stroke: '#98cbff', strokeWidth: 2, filter: 'drop-shadow(0 0 4px #98cbff)' }}
         zoomOnScroll={true}
         panOnDrag={true}
         panOnScroll={false}
         selectionKeyCode={null}
         className="dark"
-        proOptions={{ hideAttribution: true }}
-        style={{ '--xy-background-color': 'transparent' } as React.CSSProperties}
+        proOptions={{ hideAttribution: true }}          style={{ '--xy-background-color': 'transparent' } as React.CSSProperties}
       >
         <Background color="rgba(255,255,255,0.05)" gap={16} size={1} />
         <Controls 
@@ -1288,13 +1730,13 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
 
         {/* Layout toggle button */}
         <div className="absolute bottom-[160px] right-3 z-10">
-          <Tooltip label={graphLayoutMode === 'hierarchy' ? 'Switch to circular layout' : 'Switch to hierarchy layout'} position="left">
+          <Tooltip label={graphLayoutMode === 'hierarchy' ? 'Switch to circular layout' : graphLayoutMode === 'circular' ? 'Switch to force layout' : 'Switch to hierarchy layout'} position="left">
             <button
               onClick={toggleLayoutMode}
               className="flex items-center justify-center w-8 h-8 rounded-lg bg-surface-variant border border-outline/20 text-on-surface-variant hover:bg-surface hover:text-on-surface transition-all cursor-pointer opacity-20 hover:opacity-100"
             >
               <span className="material-symbols-outlined text-[16px]">
-                {graphLayoutMode === 'hierarchy' ? 'blur_circular' : 'account_tree'}
+                {graphLayoutMode === 'hierarchy' ? 'blur_circular' : graphLayoutMode === 'circular' ? 'scatter_plot' : 'account_tree'}
               </span>
             </button>
           </Tooltip>
@@ -1312,6 +1754,64 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
           </Tooltip>
         </div>
       </ReactFlow>
+
+      {/* ── Graph link confirmation modal ── */}
+      {graphLinkConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4" onClick={() => setGraphLinkConfirm(null)}>
+          <div className="bg-surface border border-outline/20 rounded-xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-on-surface mb-2">Link "{graphLinkConfirm.targetTitle}"</h3>
+            <p className="text-sm text-on-surface-variant mb-5">
+              {graphLinkConfirm.type === 'page-page'
+                ? 'How should this page be connected?'
+                : 'Link this page to the timeline block?'}
+            </p>
+            <div className="flex flex-col gap-2">
+              {graphLinkConfirm.type === 'page-page' && (
+                <button
+                  onClick={() => {
+                    const c = graphLinkConfirm;
+                    executeGraphLink(c.type, c.source, c.target, c.sourcePageId, c.targetPageId, c.targetTitle, c.targetIcon, true);
+                    setGraphLinkConfirm(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all text-left"
+                >
+                  <span className="material-symbols-outlined text-[20px]">account_tree</span>
+                  <div>
+                    <p className="text-sm font-semibold">Make Child</p>
+                    <p className="text-[11px] text-primary/70">Nest this page under the source in the sidebar</p>
+                  </div>
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  const c = graphLinkConfirm;
+                  executeGraphLink(c.type, c.source, c.target, c.sourcePageId, c.targetPageId, c.targetTitle, c.targetIcon, false, c.timelinePageId, c.blockId);
+                  setGraphLinkConfirm(null);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-left ${graphLinkConfirm.type === 'page-page' ? 'bg-surface-variant/40 text-on-surface border border-outline/10 hover:bg-surface-variant/60' : 'bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20'}`}
+              >
+                <span className="material-symbols-outlined text-[20px] text-on-surface-variant/80">link</span>
+                <div>
+                  <p className="text-sm font-semibold">{graphLinkConfirm.type === 'page-page' ? 'Just Link' : 'Confirm Link'}</p>
+                  <p className="text-[11px] text-on-surface-variant/60">
+                    {graphLinkConfirm.type === 'page-page'
+                      ? 'Only create a graph edge without changing hierarchy'
+                      : 'Connect this page to the timeline block'}
+                  </p>
+                </div>
+              </button>
+            </div>
+            <div className="flex justify-end mt-4 pt-3 border-t border-outline/10">
+              <button
+                onClick={() => setGraphLinkConfirm(null)}
+                className="px-4 py-2 rounded-lg text-on-surface-variant hover:bg-on-surface/10 transition-colors text-sm font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1393,7 +1893,7 @@ function buildTableSubGraph(
       target: rowId,
       sourceHandle: undefined,
       animated: true,
-      style: { stroke: 'rgba(152, 203, 255, 0.4)', strokeWidth: 2 },
+      style: { stroke: getPrimaryRgba(0.4), strokeWidth: 2 },
     });
 
     addRowCellNodes(page, row, rIndex, columns, visibleCols, primaryCol, rowId, projectPages, newNodes, newEdges);
@@ -1547,7 +2047,7 @@ function addRowCellNodes(
         sourceHandle: `col-${col.id}`,
         target: cellId,
         animated: true,
-        style: { stroke: 'rgba(152, 203, 255, 0.4)', strokeWidth: 2 },
+        style: { stroke: getPrimaryRgba(0.4), strokeWidth: 2 },
       });
     });
   });
@@ -1616,7 +2116,7 @@ function buildTableSubGraphWithSortBy(
         source: `page-${page.id}`,
         target: rowId,
         animated: true,
-        style: { stroke: 'rgba(152, 203, 255, 0.4)', strokeWidth: 2 },
+        style: { stroke: getPrimaryRgba(0.4), strokeWidth: 2 },
       });
       const cellVisibleCols = visibleCols.filter((cId: string) => !sortByColIds.includes(cId));
       addRowCellNodes(page, row, rIndex, columns, cellVisibleCols, primaryCol, rowId, projectPages, newNodes, newEdges);
@@ -1686,7 +2186,7 @@ function buildTableSubGraphWithSortBy(
             source: prevNodeId,
             target: nodeId,
             animated: true,
-            style: { stroke: 'rgba(152, 203, 255, 0.5)', strokeWidth: 2.5 },
+            style: { stroke: getPrimaryRgba(0.5), strokeWidth: 2.5 },
           });
         }
 
@@ -1724,7 +2224,7 @@ function buildTableSubGraphWithSortBy(
         source: prevNodeId,
         target: rowId,
         animated: true,
-        style: { stroke: 'rgba(152, 203, 255, 0.4)', strokeWidth: 2 },
+        style: { stroke: getPrimaryRgba(0.4), strokeWidth: 2 },
       });
     });
 
@@ -1781,10 +2281,10 @@ function buildTextSubGraph(
       type: 'valueNode',
       data: {
         label: tag,
-        icon: 'Hash',
+        icon: 'tag',
         ...(tagDef?.color
           ? { backgroundColor: tagDef.color, textColor: getContrastColor(tagDef.color) }
-          : { backgroundColor: '#a855f7', textColor: '#fff' }),
+          : { backgroundColor: '#a855f7', textColor: getContrastColor('#a855f7') }),
       },
       position: { x: 0, y: 0 }, // dagre will set
     });
@@ -1880,7 +2380,7 @@ function buildChecklistSubGraph(
               { colId: 'tasks', colName: 'Tasks', value: `${sortedTodos.filter((t: any) => (t.priority || 3) === p).length} items`, type: 'text', color: levelColor },
             ],
             backgroundColor: levelColor,
-            textColor: '#fff',
+            textColor: getContrastColor(levelColor),
             pageType: 'priority',
           },
           position: { x: 0, y: 0 },
@@ -1937,7 +2437,7 @@ function buildGallerySubGraph(
         type: 'valueNode',
         data: {
           label: isUntagged ? 'Untagged' : `#${tag}`,
-          icon: 'Hash',
+          icon: 'tag',
           backgroundColor: tagBg,
           textColor: getContrastColor(tagBg),
         },
@@ -1968,7 +2468,7 @@ function buildGallerySubGraph(
           label: item.title.substring(0, 20),
           icon: isVideo ? 'videocam' : 'image',
           backgroundColor: isVideo ? '#a855f7' : '#06b6d4',
-          textColor: '#fff',
+          textColor: getContrastColor(isVideo ? '#a855f7' : '#06b6d4'),
           imgUrl: item.url,
         },
         position: { x: 0, y: 0 },
@@ -2014,7 +2514,7 @@ function buildGallerySubGraph(
         label: item.title.substring(0, 20),
         icon: isVideo ? 'videocam' : 'image',
         backgroundColor: isVideo ? '#a855f7' : '#06b6d4',
-        textColor: '#fff',
+        textColor: getContrastColor(isVideo ? '#a855f7' : '#06b6d4'),
         imgUrl: item.url,
       },
       position: { x: 0, y: 0 },
@@ -2063,7 +2563,7 @@ function buildBoardSubGraph(
         type: 'valueNode',
         data: {
           label: isUntagged ? 'Untagged' : `#${tag}`,
-          icon: 'Hash',
+          icon: 'tag',
           backgroundColor: tagBg,
           textColor: getContrastColor(tagBg),
         },
@@ -2093,7 +2593,7 @@ function buildBoardSubGraph(
           label: card.title.substring(0, 20),
           icon: 'sticky_note_2',
           backgroundColor: '#a78bfa',
-          textColor: '#fff',
+          textColor: getContrastColor('#a78bfa'),
         },
         position: { x: 0, y: 0 },
       });
@@ -2246,7 +2746,7 @@ function buildFileSubGraph(
         label: item.originalName.substring(0, 18),
         icon,
         backgroundColor: '#f59e0b',
-        textColor: '#fff',
+        textColor: getContrastColor('#f59e0b'),
       },
       position: { x: 0, y: 0 },
     });
@@ -2284,7 +2784,7 @@ function buildMediaSubGraph(
         label: label.substring(0, 22),
         icon,
         backgroundColor: bgColor,
-        textColor: '#fff',
+        textColor: getContrastColor(bgColor),
       },
       position: { x: 0, y: 0 },
     });
@@ -2295,6 +2795,85 @@ function buildMediaSubGraph(
       animated: true,
       style: { stroke: edgeColor, strokeWidth: 2 },
     });
+  });
+}
+
+/* ── Timeline sub-graph: render each time block as a value node in a chain ── */
+function buildTimelineSubGraph(
+  page: any,
+  projectPages: any[],
+  newNodes: any[],
+  newEdges: any[],
+) {
+  const blocks: TimeBlock[] = page.content || [];
+  if (blocks.length === 0) return;
+
+  // Sort by date string for a clean chronological chain in the graph
+  const sorted = [...blocks].sort((a, b) => {
+    return (a.date || "").localeCompare(b.date || "");
+  });
+
+  let prevNodeId = `page-${page.id}`;
+
+  sorted.forEach((block) => {
+    const nodeId = `timeblock-${page.id}-${block.id}`;
+    const truncatedTitle = block.title.substring(0, 20);
+    const blockColor = block.color || '#3b82f6';
+
+    // Build date label for the node
+    let dateLabel = '';
+    if (block.date) {
+      dateLabel = block.date;
+    }
+
+    newNodes.push({
+      id: nodeId,
+      type: 'valueNode',
+      data: {
+        label: truncatedTitle,
+        subLabel: dateLabel,
+        icon: 'event_note',
+        backgroundColor: blockColor,
+        textColor: getContrastColor(blockColor),
+        hideLeftHandle: true,
+        showTopHandle: true,
+        showRightHandle: true,
+      },
+      position: { x: 0, y: 0 },
+    });
+
+    // Edge from previous node (timeline page or previous block) — top to bottom chain
+    newEdges.push({
+      id: `edge-timeblock-${page.id}-${block.id}`,
+      source: prevNodeId,
+      sourceHandle: prevNodeId.startsWith('timeblock-') ? 'bottom' : undefined,
+      target: nodeId,
+      targetHandle: 'top',
+      animated: true,
+      style: { stroke: blockColor + '80', strokeWidth: 2.5 },
+    });
+
+    // Create edges to linked pages — always from the right handle
+    if (block.linkedPages && Array.isArray(block.linkedPages)) {
+      block.linkedPages.forEach((lp: { pageId: string; pageTitle: string }) => {
+        if (!lp.pageId) return;
+        const targetPageExists = projectPages.find(p => p.id === lp.pageId);
+        if (!targetPageExists) return;
+        const linkEdgeId = `edge-timelink-${page.id}-${block.id}-${lp.pageId}`;
+        if (!newEdges.some((e: any) => e.id === linkEdgeId)) {
+          newEdges.push({
+            id: linkEdgeId,
+            source: nodeId,
+            sourceHandle: 'right',
+            target: `page-${lp.pageId}`,
+            animated: true,
+            style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
+          });
+        }
+      });
+    }
+
+    prevNodeId = nodeId;
   });
 }
 

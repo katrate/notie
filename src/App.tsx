@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAuthStore } from './stores/authStore'
-import { useThemeStore, applyBackgroundForTheme } from './stores/themeStore'
+import { useThemeStore, applyCustomTheme } from './stores/themeStore'
 import { useProjectStore, fetchLastSession, checkNeedsOnboarding } from './stores/projectStore'
 import { AuthScreen } from './components/auth/AuthScreen'
 import { OnboardingScreen } from './components/auth/OnboardingScreen'
@@ -9,21 +9,11 @@ import { MainLayout } from './components/layout/MainLayout'
 import { CommandPalette } from './components/CommandPalette'
 import { useToastStore } from './stores/toastStore'
 import { useCommandStore } from './stores/commandStore'
-import { useShortcutStore, SHORTCUT_DEFS } from './stores/shortcutStore'
-import {
-  DARK_GRADIENTS,
-  LIGHT_GRADIENTS,
-  DARK_BACKGROUND_COLORS,
-  LIGHT_BACKGROUND_COLORS,
-} from './stores/themeStore'
+import { useShortcutStore, SHORTCUT_DEFS, hasModifier } from './stores/shortcutStore'
 
 function App() {
   const { session, loading, user } = useAuthStore()
-  const { theme, accentColor } = useThemeStore()
-  const activeProjectId = useProjectStore(s => s.activeProjectId)
-  const activeProject = useProjectStore(
-    s => s.activeProjectId ? s.projects.find(p => p.id === s.activeProjectId) ?? null : null
-  )
+  const { customTheme } = useThemeStore()
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState<'checking' | 'show' | 'hidden'>('checking')
 
@@ -39,11 +29,12 @@ function App() {
     });
   }, [loading, session, user]);
 
+  const { themeMode } = useThemeStore()
+
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-    document.documentElement.style.setProperty('--color-primary', accentColor)
-    applyBackgroundForTheme(theme)
-  }, [])
+    document.documentElement.setAttribute('data-theme', 'dark')
+    applyCustomTheme(customTheme, themeMode)
+  }, [customTheme, themeMode])
 
   const toast = useToastStore(s => s.toast)
 
@@ -57,62 +48,7 @@ function App() {
     return false
   }, [])
 
-  // ── Apply project-specific theme overrides ──
-  // Whenever the active project changes, apply its theme settings (accent, background, mode)
-  // falling back to global settings when not configured per-project.
-  // Subscribes to activeProject so that changes made in the Dashboard apply immediately.
-  useEffect(() => {
-    const settings = activeProject?.settings || {};
-
-    // Theme mode
-    const themeMode = settings.themeMode as string | null;
-    if (themeMode === 'dark' || themeMode === 'light') {
-      document.documentElement.setAttribute('data-theme', themeMode);
-    } else {
-      const globalTheme = (() => { try { return localStorage.getItem('notie-theme') } catch { return null } })() || 'dark';
-      document.documentElement.setAttribute('data-theme', globalTheme);
-    }
-
-    // Accent color
-    const accentColor = settings.accentColor as string | null;
-    if (accentColor) {
-      document.documentElement.style.setProperty('--color-primary', accentColor);
-    } else {
-      const globalAccent = (() => { try { return localStorage.getItem('notie-accent') } catch { return null } })() || '#98cbff';
-      document.documentElement.style.setProperty('--color-primary', globalAccent);
-    }
-
-    // Background
-    const background = settings.background as string | null;
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
-
-    // Clear all background styles first
-    document.body.style.background = '';
-    document.body.style.backgroundColor = '';
-    document.body.style.backgroundImage = '';
-    document.body.style.backgroundAttachment = '';
-
-    if (background && background !== 'default') {
-      // Apply project-specific background
-      const gradients = currentTheme === 'light' ? LIGHT_GRADIENTS : DARK_GRADIENTS;
-      const gradCSS = gradients[background];
-      if (gradCSS) {
-        document.body.style.background = gradCSS;
-        document.body.style.backgroundAttachment = 'fixed';
-      } else {
-        // Look up solid colors
-        const bgColors = currentTheme === 'light' ? LIGHT_BACKGROUND_COLORS : DARK_BACKGROUND_COLORS;
-        const bg = bgColors.find(c => c.id === background);
-        if (bg) {
-          document.body.style.backgroundColor = bg.hex;
-        }
-      }
-    } else {
-      // No project background → fall back to global background
-      const themeForBg = currentTheme as 'dark' | 'light';
-      applyBackgroundForTheme(themeForBg);
-    }
-  }, [theme, accentColor, activeProjectId, activeProject]);
+  // Background is always driven by the custom theme's CSS variables via [data-custom-theme]
 
   // Global context menu: prevent browser default right-click menu everywhere
   // Custom context menus (like the editor's) handle their own contextmenu events
@@ -125,12 +61,12 @@ function App() {
   // Global keyboard shortcuts from the customizable shortcut store
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (isInEditableArea(e.target)) return
-
+      const inInput = isInEditableArea(e.target)
       const store = useShortcutStore.getState()
 
       // Command palette
       if (store.matchEvent('commandPalette', e)) {
+        if (inInput && !hasModifier(store.getCombo('commandPalette'))) return
         e.preventDefault()
         setShowCommandPalette(v => !v)
         return
@@ -138,6 +74,7 @@ function App() {
 
       // Toggle sidebar
       if (store.matchEvent('toggleSidebar', e)) {
+        if (inInput && !hasModifier(store.getCombo('toggleSidebar'))) return
         e.preventDefault()
         const state = useProjectStore.getState()
         state.setSidebarVisible(!state.sidebarVisible)
@@ -146,6 +83,7 @@ function App() {
 
       // Cycle view mode
       if (store.matchEvent('cycleViewMode', e)) {
+        if (inInput && !hasModifier(store.getCombo('cycleViewMode'))) return
         e.preventDefault()
         const state = useProjectStore.getState()
         const next = state.viewMode === 'editor' ? 'both' : state.viewMode === 'both' ? 'graph' : 'editor'
@@ -156,6 +94,7 @@ function App() {
 
       // Create project
       if (store.matchEvent('createProject', e)) {
+        if (inInput && !hasModifier(store.getCombo('createProject'))) return
         e.preventDefault()
         useCommandStore.getState().setOpenCreateProjectModal(true)
         toast('Creating new project…', 'info', 1500)
@@ -172,10 +111,12 @@ function App() {
         createChecklistPage: { type: 'checklist', label: 'Checklist', icon: 'checklist' },
         createFolderPage: { type: 'folder', label: 'Folder', icon: 'folder' },
         createCanvasPage: { type: 'canvas', label: 'Canvas', icon: 'gesture' },
+        createTimelinePage: { type: 'timeline', label: 'Timeline', icon: 'timeline' },
       }
 
       for (const def of SHORTCUT_DEFS) {
         if (def.category === 'page-creation' && store.matchEvent(def.id, e)) {
+          if (inInput && !hasModifier(store.getCombo(def.id))) continue
           e.preventDefault()
           const pageInfo = pageIdToType[def.id]
           if (!pageInfo) break

@@ -24,6 +24,7 @@ const ALL_PAGE_TYPES = [
   { type: 'video', label: 'Video', icon: 'videocam' },
   { type: 'file', label: 'Files', icon: 'description' },
   { type: 'pdf', label: 'PDF', icon: 'picture_as_pdf' },
+  { type: 'timeline', label: 'Timeline', icon: 'timeline' },
 ];
 
 interface CreatePagePanelProps {

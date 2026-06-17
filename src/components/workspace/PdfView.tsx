@@ -257,6 +257,12 @@ export function PdfView() {
     const p = Math.max(1, Math.min(page, numPages))
     setPageNumber(p)
     saveState({ pageNumber: p })
+    
+    // Scroll the page into view
+    const pageEl = pageContainerRef.current?.querySelector(`[data-page-number="${p}"]`)
+    if (pageEl) {
+      pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
   }
 
   const zoomIn = () => {
@@ -461,6 +467,58 @@ export function PdfView() {
     el.addEventListener('wheel', handleWheel, { passive: false })
     return () => el.removeEventListener('wheel', handleWheel)
   }, [handleWheel])
+
+  // ── Intersection Observer for Continuous Scrolling ──
+  // Update the current pageNumber when a page becomes the most visible one
+  useEffect(() => {
+    const container = pageContainerRef.current
+    if (!container || numPages === 0) return
+
+    // Keep track of visibility ratios for all pages
+    const visibilityMap = new Map<number, number>()
+    
+    const observer = new IntersectionObserver((entries) => {
+      let changed = false
+      entries.forEach(entry => {
+        const pageStr = (entry.target as HTMLElement).dataset.pageNumber
+        if (pageStr) {
+          const p = parseInt(pageStr, 10)
+          visibilityMap.set(p, entry.intersectionRatio)
+          changed = true
+        }
+      })
+      
+      if (changed) {
+        // Find the page with the highest intersection ratio
+        let maxRatio = 0
+        let mostVisiblePage = pageNumber
+        
+        visibilityMap.forEach((ratio, p) => {
+          if (ratio > maxRatio) {
+            maxRatio = ratio
+            mostVisiblePage = p
+          }
+        })
+        
+        // Update state if the most visible page changed and is reasonably visible
+        if (mostVisiblePage !== pageNumber && maxRatio > 0.1) {
+          setPageNumber(mostVisiblePage)
+          // We don't saveState here to avoid too many writes while scrolling,
+          // it will be saved on other interactions or unmount
+        }
+      }
+    }, {
+      root: container,
+      rootMargin: '0px',
+      threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    })
+
+    // Observe all page elements
+    const pageElements = container.querySelectorAll('[data-page-number]')
+    pageElements.forEach(el => observer.observe(el))
+
+    return () => observer.disconnect()
+  }, [numPages, pageNumber])
 
   // ── Render ──
 
@@ -826,124 +884,131 @@ export function PdfView() {
           </div>
         )}
 
-        {/* ── PDF View ── */}
-        <div ref={pageContainerRef} className="flex-1 overflow-y-auto p-4 flex justify-center bg-surface-variant/5">
-          <div className="relative">
-            <PdfDoc
-              file={fileProp}
-              onLoadSuccess={onDocumentLoadSuccess}
-              loading={
-                <div className="flex items-center justify-center py-20">
-                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                </div>
-              }
-              onLoadError={(err) => console.error('[PdfView] react-pdf load error:', err)}
-              error={
-                <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant">
-                  <span className="material-symbols-outlined text-[36px] mb-2">error_outline</span>
-                  <p className="text-sm">Failed to load PDF</p>
-                </div>
-              }
-            >
-              <div className="relative shadow-xl rounded-lg overflow-hidden bg-white mb-4" style={{ maxWidth: '100%' }}>
-                <Page
-                  pageNumber={pageNumber}
-                  scale={scale}
-                  rotate={rotation}
-                  renderTextLayer={true}
-                  renderAnnotationLayer={true}
-                  className="!bg-white"
-                  width={undefined}
-                />
-                {/* OCR text overlays (invisible selectable text for images) */}
-                {ocrWords.length > 0 && (
-                  <div className="absolute inset-0 pointer-events-none" style={{ userSelect: 'text' }}>
-                    {ocrWords.map((word, i) => (
-                      <span
-                        key={i}
-                        className="ocr-word"
-                        style={{
-                          position: 'absolute',
-                          left: word.x * scale,
-                          top: word.y * scale,
-                          width: word.w * scale,
-                          height: word.h * scale,
-                          color: 'transparent',
-                          pointerEvents: 'auto',
-                          userSelect: 'text',
-                          cursor: 'text',
-                          overflow: 'hidden',
-                          whiteSpace: 'nowrap',
-                          fontSize: Math.max(word.h * scale * 0.85, 4),
-                          fontFamily: 'sans-serif',
-                          lineHeight: word.h * scale + 'px',
-                        }}
-                      >
-                        {word.text}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {/* Highlights overlay */}
-                {currentPageHighlights.map(h => {
-                  const ratio = scale / (h.captureScale ?? 1)
-                  return (
-                    <div key={h.id} className="absolute inset-0 pointer-events-none">
-                      {h.rects.map((rect, i) => (
-                        <div
-                          key={`${h.id}-${i}`}
-                          className="absolute pointer-events-auto group cursor-pointer"
+        {/* ── PDF View — Continuous Scroll ── */}
+        <div ref={pageContainerRef} className="flex-1 overflow-y-auto p-4 flex flex-col items-center gap-4 bg-surface-variant/5">
+          <PdfDoc
+            file={fileProp}
+            onLoadSuccess={onDocumentLoadSuccess}
+            loading={
+              <div className="flex items-center justify-center py-20">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            }
+            onLoadError={(err) => console.error('[PdfView] react-pdf load error:', err)}
+            error={
+              <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant">
+                <span className="material-symbols-outlined text-[36px] mb-2">error_outline</span>
+                <p className="text-sm">Failed to load PDF</p>
+              </div>
+            }
+          >
+            {Array.from({ length: numPages }, (_, i) => i + 1).map(pNum => {
+              const pageHighlights = highlights.filter(h => h.pageNumber === pNum)
+              return (
+                <div
+                  key={pNum}
+                  data-page-number={pNum}
+                  className="relative shadow-xl rounded-lg overflow-hidden bg-white mb-2"
+                  style={{ maxWidth: '100%' }}
+                >
+                  <Page
+                    pageNumber={pNum}
+                    scale={scale}
+                    rotate={rotation}
+                    renderTextLayer={true}
+                    renderAnnotationLayer={true}
+                    className="!bg-white"
+                    width={undefined}
+                  />
+                  {/* OCR text overlays (only on current visible page for perf) */}
+                  {ocrWords.length > 0 && pNum === pageNumber && (
+                    <div className="absolute inset-0 pointer-events-none" style={{ userSelect: 'text' }}>
+                      {ocrWords.map((word, i) => (
+                        <span
+                          key={i}
+                          className="ocr-word"
                           style={{
-                            left: rect.x * ratio,
-                            top: rect.y * ratio,
-                            width: rect.w * ratio,
-                            height: rect.h * ratio,
-                            backgroundColor: h.color + '80',
-                            borderBottom: `2px solid ${h.color}`,
-                            borderRadius: '1px',
-                            transition: 'opacity 0.15s',
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            // Toggle a popover with color options and note
+                            position: 'absolute',
+                            left: word.x * scale,
+                            top: word.y * scale,
+                            width: word.w * scale,
+                            height: word.h * scale,
+                            color: 'transparent',
+                            pointerEvents: 'auto',
+                            userSelect: 'text',
+                            cursor: 'text',
+                            overflow: 'hidden',
+                            whiteSpace: 'nowrap',
+                            fontSize: Math.max(word.h * scale * 0.85, 4),
+                            fontFamily: 'sans-serif',
+                            lineHeight: word.h * scale + 'px',
                           }}
                         >
-                          {/* Hover actions */}
-                          <div className="absolute -top-6 left-0 hidden group-hover:flex items-center gap-0.5 bg-surface border border-outline/20 rounded-lg shadow-lg px-1 py-0.5 z-10 pointer-events-auto">
-                            {HIGHLIGHT_COLORS.slice(0, 5).map(c => (
-                              <button
-                                key={c}
-                                onClick={(e) => { e.stopPropagation(); changeHighlightColor(h.id, c) }}
-                                className={`w-3 h-3 rounded-sm ${h.color === c ? 'ring-1 ring-primary' : ''}`}
-                                style={{ backgroundColor: c }}
-                              />
-                            ))}
-                            <div className="w-px h-3 bg-outline/10 mx-0.5" />
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setEditingHighlight(h.id)
-                                setEditingHighlightNote(h.note || '')
-                              }}
-                              className="p-0.5 rounded text-on-surface-variant hover:text-primary"
-                            >
-                              <span className="material-symbols-outlined text-[10px]">edit_note</span>
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); removeHighlight(h.id) }}
-                              className="p-0.5 rounded text-on-surface-variant hover:text-error"
-                            >
-                              <span className="material-symbols-outlined text-[10px]">close</span>
-                            </button>
-                          </div>
-                        </div>
+                          {word.text}
+                        </span>
                       ))}
                     </div>
-                  )
-                })}
-              </div>
-            </PdfDoc>
-          </div>
+                  )}
+                  {/* Highlights overlay */}
+                  {pageHighlights.map(h => {
+                    const ratio = scale / (h.captureScale ?? 1)
+                    return (
+                      <div key={h.id} className="absolute inset-0 pointer-events-none">
+                        {h.rects.map((rect, i) => (
+                          <div
+                            key={`${h.id}-${i}`}
+                            className="absolute pointer-events-auto group cursor-pointer"
+                            style={{
+                              left: rect.x * ratio,
+                              top: rect.y * ratio,
+                              width: rect.w * ratio,
+                              height: rect.h * ratio,
+                              backgroundColor: h.color + '80',
+                              borderBottom: `2px solid ${h.color}`,
+                              borderRadius: '1px',
+                              transition: 'opacity 0.15s',
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                            }}
+                          >
+                            {/* Hover actions */}
+                            <div className="absolute -top-6 left-0 hidden group-hover:flex items-center gap-0.5 bg-surface border border-outline/20 rounded-lg shadow-lg px-1 py-0.5 z-10 pointer-events-auto">
+                              {HIGHLIGHT_COLORS.slice(0, 5).map(c => (
+                                <button
+                                  key={c}
+                                  onClick={(e) => { e.stopPropagation(); changeHighlightColor(h.id, c) }}
+                                  className={`w-3 h-3 rounded-sm ${h.color === c ? 'ring-1 ring-primary' : ''}`}
+                                  style={{ backgroundColor: c }}
+                                />
+                              ))}
+                              <div className="w-px h-3 bg-outline/10 mx-0.5" />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setEditingHighlight(h.id)
+                                  setEditingHighlightNote(h.note || '')
+                                }}
+                                className="p-0.5 rounded text-on-surface-variant hover:text-primary"
+                              >
+                                <span className="material-symbols-outlined text-[10px]">edit_note</span>
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); removeHighlight(h.id) }}
+                                className="p-0.5 rounded text-on-surface-variant hover:text-error"
+                              >
+                                <span className="material-symbols-outlined text-[10px]">close</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </PdfDoc>
         </div>
       </div>
 

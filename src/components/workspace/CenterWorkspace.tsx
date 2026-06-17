@@ -14,6 +14,7 @@ import { AudioView } from './AudioView';
 import { VideoView } from './VideoView';
 import { FileView } from './FileView';
 import { PdfView } from './PdfView';
+import { TimelineView } from './TimelineView';
 import { TextControlPanel } from './TextControlPanel';
 import { LinkPageDropdown } from './LinkPageDropdown';
 import { CreatePagePanel } from '../layout/CreatePagePanel';
@@ -164,6 +165,8 @@ export function CenterWorkspace() {
         return <FileView />;
       case 'pdf':
         return <PdfView />;
+      case 'timeline':
+        return <TimelineView />;
       case 'canvas':
         return <CanvasView />;
       default:

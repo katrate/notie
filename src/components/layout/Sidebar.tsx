@@ -11,6 +11,7 @@ import { Tooltip } from '../Tooltip'
 import { useShortcutStore } from '../../stores/shortcutStore'
 import { SettingsModal } from '../settings/SettingsModal'
 import { UpdateBanner } from '../UpdateBanner'
+import { useThemeStore, CUSTOM_THEMES } from '../../stores/themeStore'
 
 
 function countTemplateNodes(node: TemplateNode): number {
@@ -1568,7 +1569,8 @@ export function Sidebar() {
                           { type: 'audio', label: 'Audio', icon: 'mic' },
                           { type: 'video', label: 'Video', icon: 'videocam' },
                           { type: 'file', label: 'Files', icon: 'description' },
-                          { type: 'pdf', label: 'PDF', icon: 'picture_as_pdf' }
+                          { type: 'pdf', label: 'PDF', icon: 'picture_as_pdf' },
+                          { type: 'timeline', label: 'Timeline', icon: 'timeline' }
                         ].filter(pt => pt.type !== 'dashboard' || !pages.some(pg => pg.project_id === p.id && pg.type === 'dashboard')).map(pt => (
                           <Tooltip key={pt.type} label={`Add ${pt.label}`}>
                           <button
@@ -1619,6 +1621,15 @@ export function Sidebar() {
           </button>
         </Tooltip>
       </div>
+
+        <p className="text-[9px] text-on-surface-variant/30">
+          {(function() {
+            const { customTheme, themeMode } = useThemeStore.getState();
+            if (customTheme === 'none') return `Default · ${themeMode}`;
+            const theme = CUSTOM_THEMES.find(t => t.id === customTheme);
+            return theme ? `${theme.name} · ${themeMode}` : `Default · ${themeMode}`;
+          })()}
+        </p>
 
       {/* Update Banner */}
       <UpdateBanner />

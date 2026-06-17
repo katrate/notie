@@ -548,17 +548,18 @@ export function CanvasView() {
     }
   }, [activePage?.id])
 
-  /* ── Dark mode detection — auto-switch brush color ── */
+  /* ── Dark mode detection — read from CSS variable (works with custom themes) ── */
   useEffect(() => {
-    const isDarkMode = document.documentElement.classList.contains('dark')
-    setIsDark(isDarkMode)
-    setColor(isDarkMode ? '#ffffff' : '#000000')
-    const observer = new MutationObserver(() => {
-      const dark = document.documentElement.classList.contains('dark')
-      setIsDark(dark)
-      setColor(dark ? '#ffffff' : '#000000')
-    })
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    function checkIsDark() {
+      const bg = getComputedStyle(document.documentElement).getPropertyValue('--color-background').trim()
+      // If background is a dark color, it's dark mode
+      const isDark = !bg || bg === '#000000' || bg === '#131313' || parseInt(bg.slice(1, 3), 16) < 128
+      setIsDark(isDark)
+      setColor(isDark ? '#ffffff' : '#000000')
+    }
+    checkIsDark()
+    const observer = new MutationObserver(() => checkIsDark())
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-custom-theme', 'class', 'style'] })
     return () => observer.disconnect()
   }, [])
 

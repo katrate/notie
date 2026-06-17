@@ -20,7 +20,7 @@ import { CalloutBlock } from './extensions/CalloutBlock';
 import { ToggleBlock, ToggleSummary } from './extensions/ToggleBlock';
 import { EditorContextMenu } from './EditorContextMenu';
 import { useProjectStore } from '../../stores/projectStore';
-import { useThemeStore } from '../../stores/themeStore';
+
 
 const lowlight = createLowlight(common);
 
@@ -34,11 +34,7 @@ interface DocumentEditorProps {
 export function DocumentEditor({ pageId, projectId, initialContent, onEditorReady }: DocumentEditorProps) {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { updatePageContent, setActivePage, updatePage } = useProjectStore()
-  const { theme } = useThemeStore()
-
-  const proseClass = theme === 'dark'
-    ? 'prose prose-invert prose-p:text-body-lg prose-headings:text-headline-md max-w-none focus:outline-none min-h-[400px]'
-    : 'prose prose-p:text-body-lg prose-headings:text-headline-md max-w-none focus:outline-none min-h-[400px]'
+  const proseClass = 'prose prose-invert prose-p:text-body-lg prose-headings:text-headline-md max-w-none focus:outline-none min-h-[400px]'
 
   const editor = useEditor({
     extensions: [
@@ -117,13 +113,12 @@ export function DocumentEditor({ pageId, projectId, initialContent, onEditorRead
     }
   }, [pageId, editor, initialContent])
 
-  // Sync editor styling when theme changes
+  // Sync editor caret color
   useEffect(() => {
     if (!editor) return;
     const dom = editor.view.dom;
-    dom.classList.toggle('prose-invert', theme === 'dark');
-    dom.style.caretColor = theme === 'dark' ? '#e5e2e1' : '#1c1b1b';
-  }, [theme, editor])
+    dom.style.caretColor = 'var(--color-on-background)';
+  }, [editor])
 
   // Cleanup timeout on unmount
   useEffect(() => {

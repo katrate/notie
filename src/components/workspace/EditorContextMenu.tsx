@@ -13,24 +13,25 @@ export function EditorContextMenu({ editor, activePageId }: EditorContextMenuPro
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [showInsertSubmenu, setShowInsertSubmenu] = useState(false);
   const [search, setSearch] = useState('');
+  const [linkConfirm, setLinkConfirm] = useState<{ pageId: string; pageTitle: string; pageIcon: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef(editor);
   editorRef.current = editor;
 
+  const pages = useProjectStore(s => s.pages);
+
   const filtered = useMemo(() => {
     const items: { type: string; label: string; icon: string; iconColor: string; action: () => void }[] = [];
     const ed = editorRef.current;
     const store = useProjectStore.getState();
-    const allPages = store.pages;
+    const allPages = [...pages];
 
     allPages.filter(p => p.id !== activePageId && p.type !== 'dashboard').forEach(p => {
       items.push({
         type: 'page', label: p.title, icon: p.icon || 'description', iconColor: '',
         action: () => {
-          (ed.commands as any).insertPageLink({ pageId: p.id, pageTitle: p.title, pageIcon: p.icon || 'description' });
-          store.setPendingGraphLink({ sourcePageId: activePageId, targetPageId: p.id });
-          closeMenu();
+          setLinkConfirm({ pageId: p.id, pageTitle: p.title, pageIcon: p.icon || 'description' });
         },
       });
     });
@@ -55,7 +56,6 @@ export function EditorContextMenu({ editor, activePageId }: EditorContextMenuPro
           type: 'board', label: `${card.title}  —  ${p.title}`, icon: 'sticky_note_2', iconColor: 'text-violet-400',
           action: () => {
             (ed.commands as any).insertBoardCard({ cardId: card.id, title: card.title, pageId: p.id });
-            // Also add the current page to the card's linkedPages for bidirectional linking
             const boardPage = allPages.find(bp => bp.id === p.id);
             if (boardPage && Array.isArray(boardPage.content)) {
               const currentPage = allPages.find(cp => cp.id === activePageId);
@@ -73,7 +73,7 @@ export function EditorContextMenu({ editor, activePageId }: EditorContextMenuPro
                 }
               }
             }
-            store.setPendingGraphLink({ sourcePageId: activePageId, targetPageId: p.id });
+            store.setPendingGraphLink({ sourcePageId: activePageId, targetPageId: p.id, makeChild: false });
             closeMenu();
           },
         });
@@ -85,12 +85,13 @@ export function EditorContextMenu({ editor, activePageId }: EditorContextMenuPro
     if (!search.trim()) return items;
     const q = search.toLowerCase();
     return items.filter(i => i.label.toLowerCase().includes(q));
-  }, [search, activePageId]);
+  }, [search, activePageId, pages]);
 
   const closeMenu = () => {
     setVisible(false);
     setShowInsertSubmenu(false);
     setSearch('');
+    setLinkConfirm(null);
   };
 
   useEffect(() => {
@@ -111,10 +112,10 @@ export function EditorContextMenu({ editor, activePageId }: EditorContextMenuPro
     };
 
     editorElement.addEventListener('contextmenu', handleContextMenu);
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('click', handleClickOutside);
     return () => {
       editorElement.removeEventListener('contextmenu', handleContextMenu);
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('click', handleClickOutside);
     };
   }, [editor]);
 
@@ -122,9 +123,72 @@ export function EditorContextMenu({ editor, activePageId }: EditorContextMenuPro
     if (showInsertSubmenu && searchInputRef.current) searchInputRef.current.focus();
   }, [showInsertSubmenu]);
 
+  // ── Handle link confirmation ──
+  const handleLinkConfirm = (makeChild: boolean) => {
+    if (!linkConfirm) return;
+    const { pageId, pageTitle, pageIcon } = linkConfirm;
+    const ed = editorRef.current;
+    const store = useProjectStore.getState();
+    (ed.commands as any).insertPageLink({ pageId, pageTitle, pageIcon });
+    if (makeChild && activePageId) {
+      const targetPage = store.pages.find(p => p.id === pageId);
+      if (targetPage) {
+        store.updatePage(pageId, {
+          metadata: { ...(targetPage.metadata || {}), parentId: activePageId },
+        });
+      }
+    }
+    store.setPendingGraphLink({ sourcePageId: activePageId, targetPageId: pageId, makeChild });
+    setLinkConfirm(null);
+    closeMenu();
+  };
+
   if (!visible) return null;
 
   return (
+    <>
+      {/* Link confirmation modal */}
+      {linkConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[65] flex items-center justify-center p-4" onClick={() => setLinkConfirm(null)}>
+          <div className="bg-surface border border-outline/20 rounded-xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-on-surface mb-2">Link "{linkConfirm.pageTitle}"</h3>
+            <p className="text-sm text-on-surface-variant mb-5">
+              How should this page be connected?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => handleLinkConfirm(true)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all text-left"
+              >
+                <span className="material-symbols-outlined text-[20px]">account_tree</span>
+                <div>
+                  <p className="text-sm font-semibold">Make Child</p>
+                  <p className="text-[11px] text-primary/70">Nest this page under the current page in the sidebar</p>
+                </div>
+              </button>
+              <button
+                onClick={() => handleLinkConfirm(false)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-variant/40 text-on-surface border border-outline/10 hover:bg-surface-variant/60 transition-all text-left"
+              >
+                <span className="material-symbols-outlined text-[20px] text-on-surface-variant/80">link</span>
+                <div>
+                  <p className="text-sm font-semibold">Just Link</p>
+                  <p className="text-[11px] text-on-surface-variant/60">Only insert the link without changing hierarchy</p>
+                </div>
+              </button>
+            </div>
+            <div className="flex justify-end mt-4 pt-3 border-t border-outline/10">
+              <button
+                onClick={() => setLinkConfirm(null)}
+                className="px-4 py-2 rounded-lg text-on-surface-variant hover:bg-on-surface/10 transition-colors text-sm font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div ref={menuRef} className="absolute z-50" style={{ left: position.x, top: position.y }}>
       <div className="bg-surface border border-outline/10 shadow-2xl rounded-lg py-1.5 w-48 backdrop-blur-xl">
         {/* Create Block */}
@@ -204,5 +268,6 @@ export function EditorContextMenu({ editor, activePageId }: EditorContextMenuPro
         </div>
       </div>
     </div>
+    </>
   );
 }

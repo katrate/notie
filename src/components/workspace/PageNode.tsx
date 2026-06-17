@@ -1,6 +1,15 @@
 import React, { useMemo } from 'react';
 import { Handle, Position, useEdges } from '@xyflow/react';
 
+/* ── Compute contrast text color ── */
+function getContrastColor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? '#000000' : '#ffffff';
+}
+
 const categoryColors: Record<string, string> = {
   rows: '#98cbff',
   columns: '#60a5fa',
@@ -13,6 +22,7 @@ const categoryColors: Record<string, string> = {
   audio: '#06b6d4',
   video: '#a855f7',
   pages: '#60a5fa',
+  timeline: '#f59e0b',
 };
 
 interface CategorySocket {
@@ -43,24 +53,7 @@ export const PageNode = React.memo(function PageNode({ id, data }: any) {
       <Handle
         type="target"
         position={Position.Top}
-        className="!bg-transparent cursor-pointer"
-        style={{
-          width: 10,
-          height: 10,
-          backgroundColor: 'rgba(255,255,255,0.12)',
-          border: '2px solid rgba(255,255,255,0.25)',
-          opacity: 0.35,
-          transition: 'all 0.15s ease',
-          borderRadius: '50%',
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.opacity = '1';
-          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.7)';
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.opacity = '0.35';
-          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)';
-        }}
+        className="custom-handle target-handle opacity-0 hover:opacity-100"
       />
 
       {/* Title bar with left/right circular handles */}
@@ -71,29 +64,12 @@ export const PageNode = React.memo(function PageNode({ id, data }: any) {
         <Handle
           type="target"
           position={Position.Left}
-          className="!bg-transparent cursor-pointer"
-          style={{
-            width: 10,
-            height: 10,
-            backgroundColor: 'rgba(255,255,255,0.12)',
-            border: '2px solid rgba(255,255,255,0.25)',
-            opacity: 0.35,
-            transition: 'all 0.15s ease',
-            borderRadius: '50%',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.opacity = '1';
-            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.7)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.opacity = '0.35';
-            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)';
-          }}
+          className="custom-handle target-handle opacity-0 hover:opacity-100"
         />
 
         <div
-          className="flex items-center justify-center p-1.5 rounded-lg flex-shrink-0 ml-1"
-          style={hasBg ? { backgroundColor: bgColor + '30', color: '#fff' } : { color: 'var(--color-primary, #98cbff)' }}
+          className="flex items-center justify-center p-1.5 rounded-lg flex-shrink-0 ml-1 graph-node-icon"
+          style={hasBg ? { backgroundColor: bgColor + '30', color: getContrastColor(bgColor) } : { color: 'var(--color-primary, #98cbff)' }}
         >
           <span className="material-symbols-outlined text-xl">{icon}</span>
         </div>
@@ -103,25 +79,7 @@ export const PageNode = React.memo(function PageNode({ id, data }: any) {
         <Handle
           type="source"
           position={Position.Right}
-          id="right"
-          className="!bg-transparent cursor-crosshair"
-          style={{
-            width: 10,
-            height: 10,
-            backgroundColor: 'rgba(255,255,255,0.15)',
-            border: '2px solid rgba(255,255,255,0.3)',
-            opacity: 0.35,
-            transition: 'all 0.15s ease',
-            borderRadius: '50%',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.opacity = '1';
-            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.7)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.opacity = '0.35';
-            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.3)';
-          }}
+          className="custom-handle source-handle opacity-0 hover:opacity-100"
         />
       </div>
 
@@ -188,24 +146,7 @@ export const PageNode = React.memo(function PageNode({ id, data }: any) {
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!bg-transparent cursor-crosshair"
-        style={{
-          width: 10,
-          height: 10,
-          backgroundColor: 'rgba(255,255,255,0.15)',
-          border: '2px solid rgba(255,255,255,0.3)',
-          opacity: 0.35,
-          transition: 'all 0.15s ease',
-          borderRadius: '50%',
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.opacity = '1';
-          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.7)';
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.opacity = '0.35';
-          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.3)';
-        }}
+        className="custom-handle source-handle opacity-0 hover:opacity-100"
       />
     </div>
   );

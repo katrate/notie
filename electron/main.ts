@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, protocol } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, protocol, Menu } from 'electron'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync, copyFileSync, mkdirSync, statSync, readFileSync, writeFileSync, rmSync } from 'fs'
@@ -113,6 +113,7 @@ app.whenReady().then(() => {
     }
   })
 
+  Menu.setApplicationMenu(null)
   createWindow()
 
   // Check for updates shortly after startup (only in production)

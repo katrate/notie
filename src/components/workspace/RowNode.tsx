@@ -43,7 +43,7 @@ export const RowNode = React.memo(function RowNode({ id, data }: any) {
       />
 
       <div className={`px-3 py-2 flex items-center gap-2 border-b border-outline/20 ${rowColor}`}>
-        <span className="material-symbols-outlined text-lg">database</span>
+        <span className="material-symbols-outlined text-lg graph-node-icon">database</span>
         <span className="text-sm font-semibold text-on-surface truncate">{rowLabel}</span>
       </div>
 

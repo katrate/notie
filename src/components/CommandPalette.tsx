@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import MiniSearch from 'minisearch'
 import { useProjectStore } from '../stores/projectStore'
-import { useThemeStore } from '../stores/themeStore'
 import { useCommandStore } from '../stores/commandStore'
 import { useToastStore } from '../stores/toastStore'
 import { useShortcutStore } from '../stores/shortcutStore'
@@ -79,7 +78,6 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
     viewMode,
   } = useProjectStore()
 
-  const { theme, setTheme } = useThemeStore()
   const { setOpenSettingsModal, setOpenSearchModal } = useCommandStore()
   const toast = useToastStore(s => s.toast)
 
@@ -300,15 +298,14 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
         action: () => setViewState('createProject'),
       },
       {
-        id: 'toggle-theme',
-        title: theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode',
-        subtitle: theme === 'dark' ? 'Light background theme' : 'Dark background theme',
-        icon: theme === 'dark' ? 'light_mode' : 'dark_mode',
-        keywords: 'theme dark light mode toggle switch appearance',
+        id: 'open-settings-appearance',
+        title: 'Customize Theme',
+        subtitle: 'Open Settings → Appearance to choose a theme',
+        icon: 'palette',
+        keywords: 'theme appearance customize palette color',
         section: 'Actions',
         action: () => {
-          setTheme(theme === 'dark' ? 'light' : 'dark')
-          toast(`Switched to ${theme === 'dark' ? 'light' : 'dark'} mode`, 'success', 2000)
+          setOpenSettingsModal(true)
           onClose()
         },
       },
@@ -361,7 +358,7 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
     )
 
     return items
-  }, [projects, activeProjectId, theme, viewMode, setTheme, setViewMode, setOpenSettingsModal, setOpenSearchModal, onClose, createPage, toast])
+  }, [projects, activeProjectId, viewMode, setViewMode, setOpenSettingsModal, setOpenSearchModal, onClose, createPage, toast])
 
   // ── Filter actions by query ──
   const filteredActions = useMemo(() => {

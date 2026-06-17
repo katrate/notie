@@ -17,6 +17,7 @@ const PAGE_TYPES = [
   { type: 'gallery', label: 'Gallery', icon: 'photo_library' },
   { type: 'folder', label: 'Folder', icon: 'folder' },
   { type: 'checklist', label: 'Checklist', icon: 'checklist' },
+  { type: 'timeline', label: 'Timeline', icon: 'timeline' },
 ].filter(pt => pt.type !== 'dashboard');
 
 export function LinkPageDropdown({ editor, activePageId, projectId }: LinkPageDropdownProps) {

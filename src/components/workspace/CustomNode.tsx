@@ -1,6 +1,15 @@
 import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 
+/* ── Compute contrast text color ── */
+function getContrastColor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? '#000000' : '#ffffff';
+}
+
 export const CustomNode = React.memo(function CustomNode({ data }: any) {
   // Convert emoji/Lucide icons to Material Symbols names for display
   const getDisplayIcon = (icon: string | undefined): string => {
@@ -20,6 +29,7 @@ export const CustomNode = React.memo(function CustomNode({ data }: any) {
       'Label': 'label',
       'Folder': 'folder',
       'Hash': 'tag',
+      'Timeline': 'timeline',
     };
     if (lucideToMaterial[icon]) return lucideToMaterial[icon];
     return icon; // assume it's already a Material Symbols name
@@ -31,7 +41,7 @@ export const CustomNode = React.memo(function CustomNode({ data }: any) {
   const hasHexColor = data.backgroundColor && typeof data.backgroundColor === 'string' && data.backgroundColor.startsWith('#');
   const iconContainerClass = hasHexColor ? '' : (data.color || 'bg-primary/20 text-primary');
   const iconContainerStyle = hasHexColor
-    ? { backgroundColor: data.backgroundColor, color: data.textColor || '#fff' }
+    ? { backgroundColor: data.backgroundColor, color: data.textColor || getContrastColor(data.backgroundColor) }
     : {};
 
   return (
@@ -41,14 +51,14 @@ export const CustomNode = React.memo(function CustomNode({ data }: any) {
         borderColor: data.imgUrl ? 'rgba(6, 182, 212, 0.3)' : (hasHexColor ? data.backgroundColor + '60' : 'rgba(255,255,255,0.2)'),
       }}
     >
-      <Handle type="target" position={Position.Top} className="w-3 h-3 !bg-primary/40 opacity-30 group-hover:opacity-100 transition-all border-2 border-primary/60" />
+      <Handle type="target" position={Position.Top} className="custom-handle target-handle opacity-30 group-hover:opacity-100" />
       
       {data.imgUrl ? (
-        <div className="w-10 h-10 rounded-lg overflow-hidden bg-surface-variant flex-shrink-0">
+        <div className="w-10 h-10 rounded-lg overflow-hidden bg-surface-variant flex-shrink-0 graph-node-img">
           <img src={data.imgUrl} alt="" className="w-full h-full object-cover" />
         </div>
       ) : (
-        <div className={`flex items-center justify-center p-2 rounded-lg ${iconContainerClass}`} style={iconContainerStyle}>
+        <div className={`flex items-center justify-center p-2 rounded-lg graph-node-icon ${iconContainerClass}`} style={iconContainerStyle}>
           <span className="material-symbols-outlined text-2xl">{displayIcon}</span>
         </div>
       )}
@@ -58,7 +68,7 @@ export const CustomNode = React.memo(function CustomNode({ data }: any) {
         {data.subLabel && <div className="text-[10px] text-on-surface-variant mt-0.5">{data.subLabel}</div>}
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="w-3 h-3 !bg-primary/60 opacity-40 group-hover:opacity-100 transition-all border-2 border-primary/80 cursor-crosshair" />
+      <Handle type="source" position={Position.Bottom} className="custom-handle source-handle opacity-30 group-hover:opacity-100" />
     </div>
   );
 });

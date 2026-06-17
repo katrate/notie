@@ -46,6 +46,23 @@ function getClipId(): string {
   return `clip_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 }
 
+function getPrimaryColor(): string {
+  if (typeof document === 'undefined') return '#98cbff';
+  const fallback = '#98cbff';
+  try {
+    return getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 /* ═══════════════════════════════════════════════
    PLAYBACK VISUALIZER — real-time frequency bars via Web Audio API
    ═══════════════════════════════════════════════ */
@@ -99,10 +116,11 @@ function PlaybackVisualizer({ analyserRef, isPlaying }: { analyserRef: React.Mut
         const barHeight = Math.max(boosted * h * 0.95, 1)
 
         // Gradient from bright primary at top to muted at bottom
+        const primaryColor = getPrimaryColor()
         const gradient = ctx.createLinearGradient(0, h - barHeight, 0, h)
-        gradient.addColorStop(0, 'rgba(152, 203, 255, 0.95)')
-        gradient.addColorStop(0.4, 'rgba(152, 203, 255, 0.6)')
-        gradient.addColorStop(1, 'rgba(152, 203, 255, 0.08)')
+        gradient.addColorStop(0, hexToRgba(primaryColor, 0.95))
+        gradient.addColorStop(0.4, hexToRgba(primaryColor, 0.6))
+        gradient.addColorStop(1, hexToRgba(primaryColor, 0.08))
         ctx.fillStyle = gradient
 
         const x = i * barWidth + gap / 2

@@ -37,9 +37,9 @@ export const PageLinkBlock = Node.create({
         'data-page-id': HTMLAttributes.pageId,
         'data-page-title': HTMLAttributes.pageTitle || 'Untitled',
         'data-page-icon': HTMLAttributes.pageIcon || 'description',
-        href: '#',
+        role: 'button',
         style:
-          'color: #98cbff; text-decoration: none; cursor: pointer; border-bottom: 1px dashed rgba(152,203,255,0.3); display: inline-flex; align-items: center; gap: 4px; padding: 0 2px; position: relative;',
+          'color: var(--color-primary); text-decoration: none; cursor: pointer; border-bottom: 1px dashed color-mix(in srgb, var(--color-primary) 30%, transparent); display: inline-flex; align-items: center; gap: 4px; padding: 0 2px; position: relative;',
       }),
       [
         'span',
@@ -54,7 +54,6 @@ export const PageLinkBlock = Node.create({
         'span',
         {
           'data-remove-link': '',
-          'data-page-id': HTMLAttributes.pageId,
           class: 'material-symbols-outlined page-link-close-btn',
           style:
             'font-size: 12px; cursor: pointer; border-radius: 2px; line-height: 1;',

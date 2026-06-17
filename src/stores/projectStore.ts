@@ -200,8 +200,8 @@ interface ProjectState {
   setViewMode: (mode: ViewMode) => void;
   sidebarVisible: boolean;
   setSidebarVisible: (visible: boolean) => void;
-  pendingGraphLink: { sourcePageId: string; targetPageId: string } | null;
-  setPendingGraphLink: (link: { sourcePageId: string; targetPageId: string } | null) => void;
+  pendingGraphLink: { sourcePageId: string; targetPageId: string; makeChild?: boolean } | null;
+  setPendingGraphLink: (link: { sourcePageId: string; targetPageId: string; makeChild?: boolean } | null) => void;
   graphEditorInsert: null | ((pageId: string, targetPageId: string, targetTitle: string, targetIcon: string) => void);
   setGraphEditorInsert: (fn: ((pageId: string, targetPageId: string, targetTitle: string, targetIcon: string) => void) | null) => void;
   navigateToPage: (projectId: string, pageId: string) => void;

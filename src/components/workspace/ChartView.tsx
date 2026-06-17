@@ -196,10 +196,10 @@ export function ChartView() {
         if (!yKey) return null;
         return (
           <BarChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />}
-            <XAxis dataKey={xKey} stroke="rgba(255,255,255,0.3)" tick={{ fontSize: 12 }} />
-            <YAxis stroke="rgba(255,255,255,0.3)" tick={{ fontSize: 12 }} />
-            {showTooltip && <Tooltip contentStyle={{ backgroundColor: '#1e1e1e', borderColor: '#333', borderRadius: 8, fontSize: 13 }} />}
+            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="color-mix(in srgb, var(--color-on-background) 10%, transparent)" />}
+            <XAxis dataKey={xKey} stroke="color-mix(in srgb, var(--color-on-background) 40%, transparent)" tick={{ fontSize: 12, fill: 'var(--color-on-surface-variant)' }} />
+            <YAxis stroke="color-mix(in srgb, var(--color-on-background) 40%, transparent)" tick={{ fontSize: 12, fill: 'var(--color-on-surface-variant)' }} />
+            {showTooltip && <Tooltip contentStyle={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-outline)', borderRadius: 8, fontSize: 13 }} />}
             {showLegend && <Legend />}
             <Bar dataKey={yKey} name={columnLabels[yKey] || yKey} fill={COLORS[0]} radius={[4, 4, 0, 0]} />
           </BarChart>
@@ -210,10 +210,10 @@ export function ChartView() {
         if (ySeries.length === 0) return null;
         return (
           <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />}
-            <XAxis dataKey={xKey} stroke="rgba(255,255,255,0.3)" tick={{ fontSize: 12 }} />
-            <YAxis stroke="rgba(255,255,255,0.3)" tick={{ fontSize: 12 }} />
-            {showTooltip && <Tooltip contentStyle={{ backgroundColor: '#1e1e1e', borderColor: '#333', borderRadius: 8, fontSize: 13 }} />}
+            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="color-mix(in srgb, var(--color-on-background) 10%, transparent)" />}
+            <XAxis dataKey={xKey} stroke="color-mix(in srgb, var(--color-on-background) 40%, transparent)" tick={{ fontSize: 12, fill: 'var(--color-on-surface-variant)' }} />
+            <YAxis stroke="color-mix(in srgb, var(--color-on-background) 40%, transparent)" tick={{ fontSize: 12, fill: 'var(--color-on-surface-variant)' }} />
+            {showTooltip && <Tooltip contentStyle={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-outline)', borderRadius: 8, fontSize: 13 }} />}
             {showLegend && <Legend />}
             {ySeries.map((k, i) => (
               <Line key={k} type="monotone" dataKey={k} name={columnLabels[k] || k} stroke={COLORS[i % COLORS.length]} strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
@@ -226,10 +226,10 @@ export function ChartView() {
         if (ySeries.length === 0) return null;
         return (
           <AreaChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />}
-            <XAxis dataKey={xKey} stroke="rgba(255,255,255,0.3)" tick={{ fontSize: 12 }} />
-            <YAxis stroke="rgba(255,255,255,0.3)" tick={{ fontSize: 12 }} />
-            {showTooltip && <Tooltip contentStyle={{ backgroundColor: '#1e1e1e', borderColor: '#333', borderRadius: 8, fontSize: 13 }} />}
+            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="color-mix(in srgb, var(--color-on-background) 10%, transparent)" />}
+            <XAxis dataKey={xKey} stroke="color-mix(in srgb, var(--color-on-background) 40%, transparent)" tick={{ fontSize: 12, fill: 'var(--color-on-surface-variant)' }} />
+            <YAxis stroke="color-mix(in srgb, var(--color-on-background) 40%, transparent)" tick={{ fontSize: 12, fill: 'var(--color-on-surface-variant)' }} />
+            {showTooltip && <Tooltip contentStyle={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-outline)', borderRadius: 8, fontSize: 13 }} />}
             {showLegend && <Legend />}
             {ySeries.map((k, i) => (
               <Area key={k} type="monotone" dataKey={k} name={columnLabels[k] || k} stroke={COLORS[i % COLORS.length]} fill={COLORS[i % COLORS.length]} fillOpacity={0.2} strokeWidth={2} />
@@ -241,7 +241,7 @@ export function ChartView() {
       case 'pie':
         return (
           <PieChart margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-            {showTooltip && <Tooltip contentStyle={{ backgroundColor: '#1e1e1e', borderColor: '#333', borderRadius: 8, fontSize: 13 }} />}
+            {showTooltip && <Tooltip contentStyle={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-outline)', borderRadius: 8, fontSize: 13 }} />}
             {showLegend && <Legend />}
             <Pie data={data} dataKey={yKey} nameKey={xKey} cx="50%" cy="50%" outerRadius="70%" innerRadius={20} label={({ name, percent }: any) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}>
               {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
@@ -252,10 +252,10 @@ export function ChartView() {
       case 'radar':
         return (
           <RadarChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 5 }} cx="50%" cy="50%" outerRadius="70%">
-            <PolarGrid stroke="rgba(255,255,255,0.1)" />
-            <PolarAngleAxis dataKey={xKey} stroke="rgba(255,255,255,0.5)" tick={{ fontSize: 12 }} />
-            <PolarRadiusAxis stroke="rgba(255,255,255,0.15)" tick={{ fontSize: 10 }} />
-            {showTooltip && <Tooltip contentStyle={{ backgroundColor: '#1e1e1e', borderColor: '#333', borderRadius: 8, fontSize: 13 }} />}
+            <PolarGrid stroke="color-mix(in srgb, var(--color-on-background) 10%, transparent)" />
+            <PolarAngleAxis dataKey={xKey} stroke="color-mix(in srgb, var(--color-on-background) 50%, transparent)" tick={{ fontSize: 12, fill: 'var(--color-on-surface-variant)' }} />
+            <PolarRadiusAxis stroke="color-mix(in srgb, var(--color-on-background) 15%, transparent)" tick={{ fontSize: 10, fill: 'var(--color-on-surface-variant)' }} />
+            {showTooltip && <Tooltip contentStyle={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-outline)', borderRadius: 8, fontSize: 13 }} />}
             {showLegend && <Legend />}
             {keys.numericKeys.filter(k => k !== 'fullMark').slice(0, 2).map((k, i) => (
               <Radar key={k} name={columnLabels[k] || k} dataKey={k} stroke={COLORS[i % COLORS.length]} fill={COLORS[i % COLORS.length]} fillOpacity={0.2} />
