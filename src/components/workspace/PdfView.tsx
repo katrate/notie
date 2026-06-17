@@ -522,10 +522,6 @@ export function PdfView() {
 
   // ── Render ──
 
-  const currentPageHighlights = useMemo(() => {
-    return highlights.filter(h => h.pageNumber === pageNumber)
-  }, [highlights, pageNumber])
-
   // Memoize the file prop so react-pdf doesn't re-load on every render
   const fileProp = useMemo(() => {
     return pdfUrl || undefined

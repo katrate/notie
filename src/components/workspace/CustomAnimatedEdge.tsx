@@ -1,4 +1,3 @@
-import React from 'react';
 import { EdgeProps, getBezierPath, getSmoothStepPath } from '@xyflow/react';
 
 export function CustomAnimatedEdge({
