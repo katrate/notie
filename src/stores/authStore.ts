@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { useProjectStore } from './projectStore'
 import { useTemplateStore } from './templateStore'
 import { useGraphStore } from './graphStore'
+import { useThemeStore, loadThemeFromProfile, applyCustomTheme } from './themeStore'
 
 interface AuthState {
   user: PublicUser | null
@@ -19,10 +20,8 @@ function clearAllDataStores() {
   useProjectStore.getState().reset()
   useTemplateStore.getState().reset()
   useGraphStore.getState().reset()
-  // Clear localStorage items that hold user-specific data
+  useThemeStore.getState().resetToDefault()
   try {
-    localStorage.removeItem('notie-custom-theme')
-    localStorage.removeItem('notie-theme-mode')
     localStorage.removeItem('notie_recent_colors')
   } catch {}
 }
@@ -48,7 +47,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 }))
 
-window.electronAPI?.getSession().then((session) => {
+window.electronAPI?.getSession().then(async (session) => {
+  if (session?.user) {
+    const profileTheme = await loadThemeFromProfile()
+    if (profileTheme) {
+      useThemeStore.setState({ customTheme: profileTheme.customTheme, themeMode: profileTheme.themeMode })
+      applyCustomTheme(profileTheme.customTheme === 'none' ? null : profileTheme.customTheme, profileTheme.themeMode)
+    }
+  }
   useAuthStore.getState().setSession(session)
   useAuthStore.getState().setUser(session?.user ?? null)
   useAuthStore.getState().setLoading(false)
@@ -56,13 +62,22 @@ window.electronAPI?.getSession().then((session) => {
 
 let knownUserId: string | null = null
 
-window.electronAPI?.onAuthStateChanged((session) => {
+window.electronAPI?.onAuthStateChanged(async (session) => {
   const newUserId = session?.user?.id ?? null
 
   // If switching users or logging out, wipe cached data
   if (newUserId !== knownUserId) {
     knownUserId = newUserId
     clearAllDataStores()
+  }
+
+  // If logging in, load theme preferences from the user's profile
+  if (session?.user) {
+    const profileTheme = await loadThemeFromProfile()
+    if (profileTheme) {
+      useThemeStore.setState({ customTheme: profileTheme.customTheme, themeMode: profileTheme.themeMode })
+      applyCustomTheme(profileTheme.customTheme === 'none' ? null : profileTheme.customTheme, profileTheme.themeMode)
+    }
   }
 
   useAuthStore.getState().setSession(session)

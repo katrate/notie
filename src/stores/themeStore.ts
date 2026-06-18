@@ -1041,28 +1041,11 @@ interface ThemeState {
   themeMode: 'dark' | 'light'
   setCustomTheme: (id: string) => void
   setThemeMode: (mode: 'dark' | 'light') => void
-}
-
-function getInitialCustomTheme(): string {
-  try {
-    return localStorage.getItem('notie-custom-theme') || 'none'
-  } catch {
-    return 'none'
-  }
-}
-
-function getInitialThemeMode(): 'dark' | 'light' {
-  try {
-    const saved = localStorage.getItem('notie-theme-mode')
-    if (saved === 'light' || saved === 'dark') return saved
-    return 'dark'
-  } catch {
-    return 'dark'
-  }
+  resetToDefault: () => void
 }
 
 export function applyCustomTheme(themeId: string | null, mode?: 'dark' | 'light') {
-  const effectiveMode = mode || getInitialThemeMode()
+  const effectiveMode = mode || 'dark'
 
   // Set all color variables as inline styles (highest specificity — bypasses CSS cascade)
   applyThemeStyles(themeId, effectiveMode)
@@ -1076,25 +1059,47 @@ export function applyCustomTheme(themeId: string | null, mode?: 'dark' | 'light'
   document.documentElement.setAttribute('data-theme-mode', effectiveMode)
 }
 
+/** Load theme preferences from the user's profile settings (Supabase). */
+export async function loadThemeFromProfile(): Promise<{ customTheme: string; themeMode: 'dark' | 'light' } | null> {
+  try {
+    const result = await window.electronAPI?.getProfileSettings()
+    const settings = result?.data || {}
+    const customTheme = typeof settings.customTheme === 'string' ? settings.customTheme : null
+    const themeMode = settings.themeMode === 'light' || settings.themeMode === 'dark' ? settings.themeMode : null
+    if (customTheme !== null || themeMode !== null) {
+      return { customTheme: customTheme || 'none', themeMode: themeMode || 'dark' }
+    }
+  } catch {}
+  return null
+}
+
+/** Save theme preferences to the user's profile settings (Supabase). */
+async function saveThemeToProfile(customTheme: string, themeMode: string) {
+  try {
+    await window.electronAPI?.mergeProfileSettings({ customTheme, themeMode })
+  } catch {}
+}
+
 export const useThemeStore = create<ThemeState>((set) => ({
-  customTheme: getInitialCustomTheme(),
-  themeMode: getInitialThemeMode(),
+  customTheme: 'none',
+  themeMode: 'dark',
   setCustomTheme: (id) => {
     const state = useThemeStore.getState()
     // Obscura is a stark monochrome theme — always force dark mode
     const desiredMode = id === 'unseen-studio' ? 'dark' : state.themeMode
 
     set({ customTheme: id, themeMode: desiredMode })
-    try {
-      localStorage.setItem('notie-custom-theme', id)
-      localStorage.setItem('notie-theme-mode', desiredMode)
-    } catch {}
+    saveThemeToProfile(id, desiredMode)
     applyCustomTheme(id === 'none' ? null : id, desiredMode)
   },
   setThemeMode: (mode) => {
     set({ themeMode: mode })
-    try { localStorage.setItem('notie-theme-mode', mode) } catch {}
     const state = useThemeStore.getState()
+    saveThemeToProfile(state.customTheme, mode)
     applyCustomTheme(state.customTheme === 'none' ? null : state.customTheme, mode)
+  },
+  resetToDefault: () => {
+    set({ customTheme: 'none', themeMode: 'dark' })
+    applyCustomTheme(null, 'dark')
   },
 }))
