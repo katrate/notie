@@ -1,7 +1,7 @@
 {
   "name": "notie",
   "private": true,
-  "version": "0.1.9",
+  "version": "0.1.10",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
@@ -27,6 +27,7 @@
     "@tiptap/starter-kit": "^3.23.6",
     "@types/xlsx": "^0.0.35",
     "@xyflow/react": "^12.10.2",
+    "bufferutil": "^4.1.0",
     "clsx": "^2.1.1",
     "d3-force": "^3.0.0",
     "electron-updater": "^6.8.3",
@@ -46,6 +47,8 @@
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0",
     "tesseract.js": "^7.0.0",
+    "utf-8-validate": "^6.0.6",
+    "ws": "^8.21.0",
     "xlsx": "^0.18.5",
     "zustand": "^5.0.13"
   },

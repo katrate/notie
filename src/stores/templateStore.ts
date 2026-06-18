@@ -1,6 +1,10 @@
 import { create } from 'zustand'
-import { supabase } from '../lib/supabase'
 import { useProjectStore, type Page } from './projectStore'
+
+function requireApi() {
+  if (!window.electronAPI) throw new Error('Electron API is unavailable')
+  return window.electronAPI
+}
 
 export interface TemplateNode {
   title: string
@@ -59,13 +63,10 @@ export const useTemplateStore = create<TemplateState>((set) => ({
 
   fetchTemplates: async () => {
     set({ loading: true, error: null })
-    const { data, error } = await supabase
-      .from('templates')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const { data, error } = await requireApi().fetchTemplates()
 
     if (error) {
-      set({ error: error.message, loading: false })
+      set({ error, loading: false })
     } else {
       set({ templates: data as Template[], loading: false })
     }
@@ -73,12 +74,6 @@ export const useTemplateStore = create<TemplateState>((set) => ({
 
   savePageAsTemplate: async (pageId: string, name: string, description = ''): Promise<Template | null> => {
     set({ loading: true, error: null })
-
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) {
-      set({ error: 'Not authenticated', loading: false })
-      return null
-    }
 
     const allPages = useProjectStore.getState().pages
     const page = allPages.find(p => p.id === pageId)
@@ -89,20 +84,15 @@ export const useTemplateStore = create<TemplateState>((set) => ({
 
     const structure = buildStructure(pageId, allPages)
 
-    const { data, error } = await supabase
-      .from('templates')
-      .insert({
-        user_id: userData.user.id,
-        name,
-        description,
-        icon: page.icon || 'description',
-        structure,
-      })
-      .select()
-      .single()
+    const { data, error } = await requireApi().createTemplate({
+      name,
+      description,
+      icon: page.icon || 'description',
+      structure,
+    })
 
     if (error) {
-      set({ error: error.message, loading: false })
+      set({ error, loading: false })
       return null
     }
 
@@ -123,17 +113,16 @@ export const useTemplateStore = create<TemplateState>((set) => ({
 
     const structure = buildStructure(pageId, allPages)
 
-    const { error } = await supabase
-      .from('templates')
-      .update({
+    const { error } = await requireApi().updateTemplate({
+      templateId,
+      updates: {
         structure,
         icon: page.icon || 'description',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', templateId)
+      },
+    })
 
     if (error) {
-      set({ error: error.message, loading: false })
+      set({ error, loading: false })
     } else {
       set(state => ({
         templates: state.templates.map(t =>
@@ -146,13 +135,10 @@ export const useTemplateStore = create<TemplateState>((set) => ({
 
   deleteTemplate: async (templateId: string) => {
     set({ loading: true, error: null })
-    const { error } = await supabase
-      .from('templates')
-      .delete()
-      .eq('id', templateId)
+    const { error } = await requireApi().deleteTemplate(templateId)
 
     if (error) {
-      set({ error: error.message, loading: false })
+      set({ error, loading: false })
     } else {
       set(state => ({
         templates: state.templates.filter(t => t.id !== templateId),

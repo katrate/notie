@@ -99,7 +99,7 @@ export function MainLayout() {
         {/* Center Main Workspace */}
         {viewMode !== 'graph' && (
           <Panel id="editor" minSize="250px">
-            <div className="flex flex-col relative z-0 min-w-0 h-full w-full">
+            <div className={`flex flex-col relative z-0 min-w-0 h-full w-full ${activeProjectId ? 'pt-[44px]' : ''}`}>
               <CenterWorkspace />
             </div>
           </Panel>

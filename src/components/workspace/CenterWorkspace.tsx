@@ -350,7 +350,7 @@ export function CenterWorkspace() {
                       />
                     </div>
                   )}
-                   {activePageId && activePage?.project_id && ['board', 'gallery'].includes(activePage?.type || '') && (
+                   {activePageId && activePage?.project_id && ['gallery'].includes(activePage?.type || '') && (
                      <div className="flex-shrink-0 relative">
                        <GraphSortModeToggle
                          pageId={activePageId}

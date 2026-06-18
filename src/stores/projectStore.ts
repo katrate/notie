@@ -1,5 +1,9 @@
 import { create } from 'zustand'
-import { supabase } from '../lib/supabase'
+
+function requireApi() {
+  if (!window.electronAPI) throw new Error('Electron API is unavailable')
+  return window.electronAPI
+}
 
 // Track the latest save request to avoid stale updates overwriting newer ones
 let _lastSaveId = 0;
@@ -9,24 +13,8 @@ let _lastSaveId = 0;
 async function saveLastSession(projectId: string | null, pageId: string | null) {
   const saveId = ++_lastSaveId;
   try {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return;
-    // Only apply this save if no newer save has been requested
     if (saveId !== _lastSaveId) return;
-    // Read current settings first to avoid overwriting other keys
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('settings')
-      .eq('id', userData.user.id)
-      .maybeSingle();
-    const currentSettings = (profile?.settings as Record<string, any>) || {};
-    if (saveId !== _lastSaveId) return;
-    await supabase
-      .from('profiles')
-      .update({
-        settings: { ...currentSettings, lastProjectId: projectId, lastPageId: pageId }
-      })
-      .eq('id', userData.user.id);
+    await requireApi().mergeProfileSettings({ lastProjectId: projectId, lastPageId: pageId });
   } catch (err) {
     console.error('Failed to save session:', err);
   }
@@ -38,22 +26,8 @@ let _lastExpandedSaveId = 0;
 export async function saveExpandedProjects(projectIds: string[]): Promise<void> {
   const saveId = ++_lastExpandedSaveId;
   try {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return;
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('settings')
-      .eq('id', userData.user.id)
-      .maybeSingle();
-    const currentSettings = (profile?.settings as Record<string, any>) || {};
-    // Only apply if no newer save was requested
     if (saveId !== _lastExpandedSaveId) return;
-    await supabase
-      .from('profiles')
-      .update({
-        settings: { ...currentSettings, expandedProjects: projectIds }
-      })
-      .eq('id', userData.user.id);
+    await requireApi().mergeProfileSettings({ expandedProjects: projectIds });
   } catch (err) {
     console.error('Failed to save expanded projects:', err);
   }
@@ -61,14 +35,8 @@ export async function saveExpandedProjects(projectIds: string[]): Promise<void> 
 
 export async function fetchExpandedProjects(): Promise<string[]> {
   try {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return [];
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('settings')
-      .eq('id', userData.user.id)
-      .maybeSingle();
-    const settings = (profile?.settings as Record<string, any>) || {};
+    const result = await requireApi().getProfileSettings();
+    const settings = result.data || {};
     return settings.expandedProjects || [];
   } catch (err) {
     console.error('Failed to fetch expanded projects:', err);
@@ -78,14 +46,8 @@ export async function fetchExpandedProjects(): Promise<string[]> {
 
 export async function fetchLastSession(): Promise<{ lastProjectId: string | null; lastPageId: string | null }> {
   try {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return { lastProjectId: null, lastPageId: null };
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('settings')
-      .eq('id', userData.user.id)
-      .maybeSingle();
-    const settings = (profile?.settings as Record<string, any>) || {};
+    const result = await requireApi().getProfileSettings();
+    const settings = result.data || {};
     return {
       lastProjectId: settings.lastProjectId || null,
       lastPageId: settings.lastPageId || null,
@@ -96,21 +58,10 @@ export async function fetchLastSession(): Promise<{ lastProjectId: string | null
   }
 }
 
-export async function checkNeedsOnboarding(userId: string): Promise<boolean> {
+export async function checkNeedsOnboarding(_userId?: string): Promise<boolean> {
   try {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('settings')
-      .eq('id', userId)
-      .maybeSingle();
-    // First login if no profile exists or settings are completely empty
-    if (!profile || !profile.settings) return true;
-    const settings = profile.settings as Record<string, any>;
-    // Only these keys mean onboarding was never completed
-    if (settings.onboardingCompleted) return false;
-    // Has existing session data = not a first-time user
-    if (settings.lastProjectId || settings.lastPageId || settings.expandedProjects) return false;
-    return true;
+    const result = await requireApi().checkNeedsOnboarding();
+    return Boolean(result.data);
   } catch {
     return false;
   }
@@ -123,25 +74,13 @@ export async function saveOnboardingSettings(
   backgroundColor: string
 ): Promise<void> {
   try {
-    // Read current settings first
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('settings')
-      .eq('id', userId)
-      .maybeSingle();
-    const currentSettings = (profile?.settings as Record<string, any>) || {};
-    await supabase
-      .from('profiles')
-      .upsert({
-        id: userId,
-        settings: {
-          ...currentSettings,
-          theme,
-          accentColor,
-          backgroundColor,
-          onboardingCompleted: true,
-        },
-      });
+    void userId;
+    await requireApi().mergeProfileSettings({
+      theme,
+      accentColor,
+      backgroundColor,
+      onboardingCompleted: true,
+    });
   } catch (err) {
     console.error('Failed to save onboarding settings:', err);
   }
@@ -228,30 +167,24 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   error: null,
 
   fetchProjects: async () => {
+    if (get().projects.length > 0) return
     set({ loading: true, error: null })
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .order('position', { ascending: true })
-      .order('created_at', { ascending: false })
+    const { data, error } = await requireApi().fetchProjects()
 
     if (error) {
-      set({ error: error.message, loading: false })
+      set({ error, loading: false })
     } else {
       set({ projects: data as Project[], loading: false })
     }
   },
 
   fetchPages: async (projectId: string) => {
+    if (get().pages.some(p => p.project_id === projectId)) return
     set({ loading: true, error: null })
-    const { data, error } = await supabase
-      .from('pages')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('position', { ascending: true })
+    const { data, error } = await requireApi().fetchPages(projectId)
 
     if (error) {
-      set({ error: error.message, loading: false })
+      set({ error, loading: false })
     } else if (data) {
       // Merge new pages with existing ones, removing any old pages for this project
       set(state => {
@@ -263,27 +196,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   createProject: async (name: string, layout_type = 'document') => {
     set({ loading: true, error: null })
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) {
-      set({ error: 'Not authenticated', loading: false })
-      return
-    }
-
-    const newProject = {
-      name,
-      layout_type,
-      icon: 'folder',
-      user_id: userData.user.id
-    }
-
-    const { data, error } = await supabase
-      .from('projects')
-      .insert(newProject)
-      .select()
-      .single()
+    const { data, error } = await requireApi().createProject({ name, layout_type })
 
     if (error) {
-      set({ error: error.message, loading: false })
+      set({ error, loading: false })
     } else if (data) {
       set((state) => ({
         projects: [data as Project, ...state.projects],
@@ -298,26 +214,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   createStandalonePage: async (_title = 'Untitled', type = 'text', icon?: string) => {
     set({ loading: true, error: null });
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
-      set({ error: 'Not authenticated', loading: false });
-      return null;
-    }
-    const newPage = {
-      project_id: null,
+    const { data, error } = await requireApi().createPage({
+      projectId: null,
       title: _title,
       type,
       metadata: { isStandalone: true },
       icon: icon || null,
-      user_id: userData.user.id,
-    };
-    const { data, error } = await supabase
-      .from('pages')
-      .insert(newPage)
-      .select()
-      .single();
+    });
     if (error) {
-      set({ error: error.message, loading: false });
+      set({ error, loading: false });
       return null;
     } else if (data) {
       set(state => ({
@@ -332,14 +237,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   fetchStandalonePages: async () => {
+    if (get().pages.some(p => !p.project_id)) return
     set({ loading: true, error: null });
-    const { data, error } = await supabase
-      .from('pages')
-      .select('*')
-      .is('project_id', null)
-      .order('created_at', { ascending: false });
+    const { data, error } = await requireApi().fetchStandalonePages();
     if (error) {
-      set({ error: error.message, loading: false });
+      set({ error, loading: false });
     } else if (data) {
       set(state => {
         // Remove old standalone pages, add fresh ones
@@ -361,11 +263,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }));
     if (wasActive) saveLastSession(projectId, pageId);
     // Update in DB
-    const { error } = await supabase
-      .from('pages')
-      .update({ project_id: projectId, metadata: { ...(page.metadata || {}), isStandalone: undefined, addedToProjectAt: new Date().toISOString() }, updated_at: new Date().toISOString() })
-      .eq('id', pageId);
-    if (error) console.error('Failed to move page to project:', error);
+    const result = await requireApi().updatePage({
+      pageId,
+      updates: { project_id: projectId, metadata: { ...(page.metadata || {}), isStandalone: undefined, addedToProjectAt: new Date().toISOString() } },
+    });
+    if (result.error) console.error('Failed to move page to project:', result.error);
   },
 
   createPage: async (projectId: string, _title = 'Untitled', type = 'text', metadata: any = {}, icon?: string) => {
@@ -375,28 +277,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       set({ error: 'Cannot create page: no project selected', loading: false });
       return null;
     }
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
-      set({ error: 'Not authenticated', loading: false });
-      return null;
-    }
     const title = type === 'dashboard' ? 'Dashboard' : _title;
     const forceIcon = type === 'dashboard' ? 'dashboard_customize' : icon;
-    const newPage = {
-      project_id: projectId,
+    const { data, error } = await requireApi().createPage({
+      projectId,
       title,
       type,
       metadata: { ...metadata, isProtected: type === 'dashboard' ? true : (metadata?.isProtected || false) },
       icon: forceIcon || null,
-      user_id: userData.user.id,
-    };
-    const { data, error } = await supabase
-      .from('pages')
-      .insert(newPage)
-      .select()
-      .single();
+    });
     if (error) {
-      set({ error: error.message, loading: false });
+      set({ error, loading: false });
       return null;
     } else if (data) {
       set(state => ({
@@ -412,12 +303,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   deleteProject: async (projectId: string) => {
     set({ loading: true, error: null })
-    const { error } = await supabase
-      .from('projects')
-      .delete()
-      .eq('id', projectId)
+    const { error } = await requireApi().deleteProject(projectId)
     if (error) {
-      set({ error: error.message, loading: false })
+      set({ error, loading: false })
     } else {
       set(state => ({
         projects: state.projects.filter(p => p.id !== projectId),
@@ -453,13 +341,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const idsArray = Array.from(idsToRemove);
 
     // Delete all collected IDs from the database
-    const { error } = await supabase
-      .from('pages')
-      .delete()
-      .in('id', idsArray);
+    const { error } = await requireApi().deletePages(idsArray);
       
     if (error) {
-      set({ error: error.message, loading: false });
+      set({ error, loading: false });
     } else {
       set(state => ({
         pages: state.pages.filter(p => !idsToRemove.has(p.id)),
@@ -551,7 +436,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set(state => ({
       pages: state.pages.map(p => p.id === pageId ? { ...p, content } : p)
     }))
-    const { error } = await supabase.from('pages').update({ content, updated_at: new Date().toISOString() }).eq('id', pageId)
+    const { error } = await requireApi().updatePage({ pageId, updates: { content } })
     if (error) console.error('Failed to save page content:', error)
   },
 
@@ -568,7 +453,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set(state => ({
       pages: state.pages.map(p => p.id === pageId ? { ...p, ...updates } : p)
     }))
-    const { error } = await supabase.from('pages').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', pageId)
+    const { error } = await requireApi().updatePage({ pageId, updates })
     if (error) console.error('Failed to update page:', error)
   },
 
@@ -576,7 +461,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set(state => ({
       projects: state.projects.map(p => p.id === projectId ? { ...p, ...updates } : p)
     }))
-    const { error } = await supabase.from('projects').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', projectId)
+    const { error } = await requireApi().updateProject({ projectId, updates })
     if (error) console.error('Failed to update project:', error)
   },
 

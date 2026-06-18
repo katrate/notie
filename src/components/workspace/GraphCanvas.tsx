@@ -2482,7 +2482,6 @@ function buildGallerySubGraph(
               id: `edge-img-${page.id}-${item.id}-${tag}`,
               source: `taggroup-${page.id}-${tag}`,
               target: nodeId,
-              sourceHandle: `img-${item.id}`,
               animated: true,
               style: { stroke: 'rgba(6, 182, 212, 0.5)', strokeWidth: 2 },
             });
@@ -2493,7 +2492,6 @@ function buildGallerySubGraph(
           id: `edge-img-${page.id}-${item.id}-__untagged__`,
           source: `taggroup-${page.id}-__untagged__`,
           target: nodeId,
-          sourceHandle: `img-${item.id}`,
           animated: true,
           style: { stroke: 'rgba(6, 182, 212, 0.5)', strokeWidth: 2 },
         });
@@ -2606,7 +2604,6 @@ function buildBoardSubGraph(
               id: `edge-boardcard-${page.id}-${card.id}-${tag}`,
               source: `boardtag-${page.id}-${tag}`,
               target: cardNodeId,
-              sourceHandle: `card-${card.id}`,
               animated: true,
               style: { stroke: 'rgba(139, 92, 246, 0.5)', strokeWidth: 2 },
             });
@@ -2617,7 +2614,6 @@ function buildBoardSubGraph(
           id: `edge-boardcard-${page.id}-${card.id}-__untagged__`,
           source: `boardtag-${page.id}-__untagged__`,
           target: cardNodeId,
-          sourceHandle: `card-${card.id}`,
           animated: true,
           style: { stroke: 'rgba(139, 92, 246, 0.5)', strokeWidth: 2 },
         });

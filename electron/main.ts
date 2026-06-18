@@ -4,8 +4,23 @@ import { fileURLToPath } from 'url'
 import { existsSync, copyFileSync, mkdirSync, statSync, readFileSync, writeFileSync, rmSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { autoUpdater } from 'electron-updater'
+import { createClient, type Session, type User } from '@supabase/supabase-js'
+import WebSocket from 'ws'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder-project.supabase.co'
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key'
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    flowType: 'pkce',
+    autoRefreshToken: true,
+    persistSession: false,
+    detectSessionInUrl: false,
+  },
+  realtime: {
+    transport: WebSocket,
+  },
+})
 
 // Register custom scheme as privileged before app is ready
 protocol.registerSchemesAsPrivileged([
@@ -22,6 +37,94 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let mainWindow: BrowserWindow | null = null
+let authSession: Session | null = null
+
+type CacheEntry<T> = { data: T; expiresAt: number }
+const CACHE_TTL_MS = 60_000
+const readCache = new Map<string, CacheEntry<unknown>>()
+
+function sessionPath() {
+  return join(app.getPath('userData'), 'supabase-session.json')
+}
+
+function publicUser(user: User | null | undefined) {
+  if (!user) return null
+  return {
+    id: user.id,
+    email: user.email,
+    app_metadata: user.app_metadata,
+    user_metadata: user.user_metadata,
+  }
+}
+
+function publicSession(session: Session | null) {
+  if (!session) return null
+  return {
+    expires_at: session.expires_at,
+    user: publicUser(session.user),
+  }
+}
+
+function broadcastAuthState() {
+  mainWindow?.webContents.send('auth:state-changed', publicSession(authSession))
+}
+
+function clearReadCache(prefix?: string) {
+  if (!prefix) {
+    readCache.clear()
+    return
+  }
+  for (const key of readCache.keys()) {
+    if (key.startsWith(prefix)) readCache.delete(key)
+  }
+}
+
+async function cached<T>(key: string, loader: () => Promise<T>, ttl = CACHE_TTL_MS): Promise<T> {
+  const entry = readCache.get(key) as CacheEntry<T> | undefined
+  if (entry && entry.expiresAt > Date.now()) return entry.data
+  const data = await loader()
+  readCache.set(key, { data, expiresAt: Date.now() + ttl })
+  return data
+}
+
+async function restoreAuthSession() {
+  try {
+    if (!existsSync(sessionPath())) return
+    const stored = JSON.parse(readFileSync(sessionPath(), 'utf-8')) as Session
+    const { data, error } = await supabase.auth.setSession({
+      access_token: stored.access_token,
+      refresh_token: stored.refresh_token,
+    })
+    if (error) throw error
+    authSession = data.session
+  } catch {
+    authSession = null
+    try { rmSync(sessionPath()) } catch { /* ignore */ }
+  }
+}
+
+function persistAuthSession(session: Session | null) {
+  authSession = session
+  clearReadCache()
+  if (!session) {
+    try { rmSync(sessionPath()) } catch { /* ignore */ }
+    broadcastAuthState()
+    return
+  }
+  writeFileSync(sessionPath(), JSON.stringify(session), 'utf-8')
+  broadcastAuthState()
+}
+
+async function requireUser() {
+  if (!authSession) throw new Error('Not authenticated')
+  const { data, error } = await supabase.auth.getUser(authSession.access_token)
+  if (error || !data.user) throw new Error(error?.message || 'Not authenticated')
+  return data.user
+}
+
+function throwIfError(error: { message?: string } | null) {
+  if (error) throw new Error(error.message || 'Request failed')
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -77,7 +180,9 @@ if (!isDev) {
   })
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await restoreAuthSession()
+
   // Register custom protocol to serve attachment files as URLs
   protocol.handle('notie-attachment', async (request) => {
     const url = new URL(request.url)
@@ -115,6 +220,7 @@ app.whenReady().then(() => {
 
   Menu.setApplicationMenu(null)
   createWindow()
+  broadcastAuthState()
 
   // Check for updates shortly after startup (only in production)
   if (!isDev) {
@@ -135,6 +241,328 @@ app.on('activate', () => {
 })
 
 /* ── IPC Handlers ── */
+
+ipcMain.handle('auth:getSession', async () => publicSession(authSession))
+
+ipcMain.handle('auth:getUser', async () => publicUser(authSession?.user))
+
+ipcMain.handle('auth:signIn', async (_event, credentials: { email: string; password: string }) => {
+  const { data, error } = await supabase.auth.signInWithPassword(credentials)
+  if (error) return { error: error.message }
+  persistAuthSession(data.session)
+  return { session: publicSession(data.session), user: publicUser(data.user) }
+})
+
+ipcMain.handle('auth:signUp', async (_event, credentials: { email: string; password: string }) => {
+  const { data, error } = await supabase.auth.signUp(credentials)
+  if (error) return { error: error.message }
+  if (data.session) persistAuthSession(data.session)
+  return { session: publicSession(data.session), user: publicUser(data.user) }
+})
+
+ipcMain.handle('auth:signOut', async () => {
+  const { error } = await supabase.auth.signOut()
+  persistAuthSession(null)
+  if (error) return { error: error.message }
+  return { success: true }
+})
+
+ipcMain.handle('data:fetchProjects', async () => {
+  try {
+    await requireUser()
+    const data = await cached('projects', async () => {
+      const result = await supabase
+        .from('projects')
+        .select('*')
+        .order('position', { ascending: true })
+        .order('created_at', { ascending: false })
+      throwIfError(result.error)
+      return result.data || []
+    })
+    return { data }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to fetch projects' }
+  }
+})
+
+ipcMain.handle('data:fetchPages', async (_event, projectId: string) => {
+  try {
+    await requireUser()
+    const data = await cached(`pages:${projectId}`, async () => {
+      const result = await supabase
+        .from('pages')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('position', { ascending: true })
+      throwIfError(result.error)
+      return result.data || []
+    })
+    return { data }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to fetch pages' }
+  }
+})
+
+ipcMain.handle('data:fetchStandalonePages', async () => {
+  try {
+    await requireUser()
+    const data = await cached('pages:standalone', async () => {
+      const result = await supabase
+        .from('pages')
+        .select('*')
+        .is('project_id', null)
+        .order('created_at', { ascending: false })
+      throwIfError(result.error)
+      return result.data || []
+    })
+    return { data }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to fetch standalone pages' }
+  }
+})
+
+ipcMain.handle('data:getProfileSettings', async () => {
+  try {
+    const user = await requireUser()
+    const settings = await cached(`profile:${user.id}`, async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('settings')
+        .eq('id', user.id)
+        .maybeSingle()
+      throwIfError(error)
+      return (data?.settings as Record<string, any>) || {}
+    })
+    return { data: settings }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to fetch profile settings' }
+  }
+})
+
+ipcMain.handle('data:mergeProfileSettings', async (_event, settingsPatch: Record<string, any>) => {
+  try {
+    const user = await requireUser()
+    const { data: profile, error: fetchError } = await supabase
+      .from('profiles')
+      .select('settings')
+      .eq('id', user.id)
+      .maybeSingle()
+    throwIfError(fetchError)
+    const settings = { ...((profile?.settings as Record<string, any>) || {}), ...settingsPatch }
+    const { error } = await supabase.from('profiles').upsert({ id: user.id, settings })
+    throwIfError(error)
+    readCache.set(`profile:${user.id}`, { data: settings, expiresAt: Date.now() + CACHE_TTL_MS })
+    return { data: settings }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to save profile settings' }
+  }
+})
+
+ipcMain.handle('data:checkNeedsOnboarding', async () => {
+  try {
+    const user = await requireUser()
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('settings')
+      .eq('id', user.id)
+      .maybeSingle()
+    throwIfError(error)
+    if (!data || !data.settings) return { data: true }
+    const settings = data.settings as Record<string, any>
+    if (settings.onboardingCompleted) return { data: false }
+    if (settings.lastProjectId || settings.lastPageId || settings.expandedProjects) return { data: false }
+    return { data: true }
+  } catch {
+    return { data: false }
+  }
+})
+
+ipcMain.handle('data:createProject', async (_event, payload: { name: string; layout_type: string }) => {
+  try {
+    const user = await requireUser()
+    const { data, error } = await supabase
+      .from('projects')
+      .insert({ name: payload.name, layout_type: payload.layout_type, icon: 'folder', user_id: user.id })
+      .select()
+      .single()
+    throwIfError(error)
+    clearReadCache('projects')
+    return { data }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to create project' }
+  }
+})
+
+ipcMain.handle('data:createPage', async (_event, payload: { projectId: string | null; title: string; type: string; metadata?: any; icon?: string | null }) => {
+  try {
+    const user = await requireUser()
+    const { data, error } = await supabase
+      .from('pages')
+      .insert({
+        project_id: payload.projectId,
+        title: payload.title,
+        type: payload.type,
+        metadata: payload.metadata || {},
+        icon: payload.icon || null,
+        user_id: user.id,
+      })
+      .select()
+      .single()
+    throwIfError(error)
+    clearReadCache(payload.projectId ? `pages:${payload.projectId}` : 'pages:standalone')
+    return { data }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to create page' }
+  }
+})
+
+ipcMain.handle('data:updatePage', async (_event, payload: { pageId: string; updates: Record<string, any> }) => {
+  try {
+    await requireUser()
+    const { error } = await supabase
+      .from('pages')
+      .update({ ...payload.updates, updated_at: new Date().toISOString() })
+      .eq('id', payload.pageId)
+    throwIfError(error)
+    clearReadCache('pages:')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to update page' }
+  }
+})
+
+ipcMain.handle('data:updateProject', async (_event, payload: { projectId: string; updates: Record<string, any> }) => {
+  try {
+    await requireUser()
+    const { error } = await supabase
+      .from('projects')
+      .update({ ...payload.updates, updated_at: new Date().toISOString() })
+      .eq('id', payload.projectId)
+    throwIfError(error)
+    clearReadCache('projects')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to update project' }
+  }
+})
+
+ipcMain.handle('data:deleteProject', async (_event, projectId: string) => {
+  try {
+    await requireUser()
+    const { error } = await supabase.from('projects').delete().eq('id', projectId)
+    throwIfError(error)
+    clearReadCache()
+    return { success: true }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to delete project' }
+  }
+})
+
+ipcMain.handle('data:deletePages', async (_event, pageIds: string[]) => {
+  try {
+    await requireUser()
+    const { error } = await supabase.from('pages').delete().in('id', pageIds)
+    throwIfError(error)
+    clearReadCache('pages:')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to delete pages' }
+  }
+})
+
+ipcMain.handle('data:fetchTemplates', async () => {
+  try {
+    await requireUser()
+    const data = await cached('templates', async () => {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .order('created_at', { ascending: false })
+      throwIfError(error)
+      return data || []
+    })
+    return { data }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to fetch templates' }
+  }
+})
+
+ipcMain.handle('data:createTemplate', async (_event, payload: Record<string, any>) => {
+  try {
+    const user = await requireUser()
+    const { data, error } = await supabase
+      .from('templates')
+      .insert({ ...payload, user_id: user.id })
+      .select()
+      .single()
+    throwIfError(error)
+    clearReadCache('templates')
+    return { data }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to create template' }
+  }
+})
+
+ipcMain.handle('data:updateTemplate', async (_event, payload: { templateId: string; updates: Record<string, any> }) => {
+  try {
+    await requireUser()
+    const { error } = await supabase
+      .from('templates')
+      .update({ ...payload.updates, updated_at: new Date().toISOString() })
+      .eq('id', payload.templateId)
+    throwIfError(error)
+    clearReadCache('templates')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to update template' }
+  }
+})
+
+ipcMain.handle('data:deleteTemplate', async (_event, templateId: string) => {
+  try {
+    await requireUser()
+    const { error } = await supabase.from('templates').delete().eq('id', templateId)
+    throwIfError(error)
+    clearReadCache('templates')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to delete template' }
+  }
+})
+
+ipcMain.handle('data:fetchGraphData', async (_event, projectId: string) => {
+  try {
+    await requireUser()
+    const data = await cached(`graph:${projectId}`, async () => {
+      const [nodes, edges] = await Promise.all([
+        supabase.from('graph_nodes').select('*').eq('project_id', projectId),
+        supabase.from('graph_edges').select('*').eq('project_id', projectId),
+      ])
+      throwIfError(nodes.error)
+      throwIfError(edges.error)
+      return { nodes: nodes.data || [], edges: edges.data || [] }
+    })
+    return { data }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to fetch graph data' }
+  }
+})
+
+ipcMain.handle('data:addGraphNode', async (_event, node: Record<string, any>) => {
+  try {
+    const user = await requireUser()
+    const { data, error } = await supabase
+      .from('graph_nodes')
+      .insert({ ...node, user_id: user.id })
+      .select()
+      .single()
+    throwIfError(error)
+    if (node.project_id) clearReadCache(`graph:${node.project_id}`)
+    return { data }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to add graph node' }
+  }
+})
 
 ipcMain.handle('update:check', async () => {
   if (isDev) return { error: 'Cannot check for updates in development mode' }

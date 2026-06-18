@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../stores/authStore'
-import { supabase } from '../../lib/supabase'
 import { Tooltip } from '../Tooltip'
 
 export function AuthScreen() {
@@ -87,12 +86,12 @@ export function AuthScreen() {
     setError(null)
     
     if (isSignUp) {
-      const { data, error } = await supabase.auth.signUp({ email, password })
-      if (error) setError(error.message)
-      else if (data.session === null) setError("Check your email for the login link!")
+      const result = await window.electronAPI?.signUp(email, password)
+      if (result?.error) setError(result.error)
+      else if (result?.session === null) setError("Check your email for the login link!")
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) setError(error.message)
+      const result = await window.electronAPI?.signIn(email, password)
+      if (result?.error) setError(result.error)
     }
     
     setLoading(false)

@@ -1,14 +1,12 @@
 import { create } from 'zustand'
-import { Session, User } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
 
 interface AuthState {
-  user: User | null
-  session: Session | null
+  user: PublicUser | null
+  session: PublicSession | null
   loading: boolean
   error: string | null
-  setUser: (user: User | null) => void
-  setSession: (session: Session | null) => void
+  setUser: (user: PublicUser | null) => void
+  setSession: (session: PublicSession | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   signOut: () => Promise<void>
@@ -25,23 +23,23 @@ export const useAuthStore = create<AuthState>((set) => ({
   setError: (error) => set({ error }),
   signOut: async () => {
     set({ loading: true })
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      set({ error: error.message, loading: false })
+    const result = await window.electronAPI?.signOut()
+    if (result?.error) {
+      set({ error: result.error, loading: false })
     } else {
       set({ user: null, session: null, loading: false })
     }
   },
 }))
 
-// Initialize auth state listener
-supabase.auth.getSession().then(({ data: { session } }) => {
+window.electronAPI?.getSession().then((session) => {
   useAuthStore.getState().setSession(session)
   useAuthStore.getState().setUser(session?.user ?? null)
   useAuthStore.getState().setLoading(false)
 })
 
-supabase.auth.onAuthStateChange((_event, session) => {
+window.electronAPI?.onAuthStateChanged((session) => {
   useAuthStore.getState().setSession(session)
   useAuthStore.getState().setUser(session?.user ?? null)
+  useAuthStore.getState().setLoading(false)
 })

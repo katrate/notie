@@ -1,6 +1,4 @@
 import { useState } from 'react'
-import { supabase } from '../../lib/supabase'
-import { saveOnboardingSettings } from '../../stores/projectStore'
 
 export function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
   const [saving, setSaving] = useState(false)
@@ -11,11 +9,12 @@ export function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
   const handleGetStarted = async () => {
     setSaving(true)
     try {
-      // Save default onboarding settings to profile
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await saveOnboardingSettings(user.id, 'dark', '#98cbff', 'default')
-      }
+      await window.electronAPI?.mergeProfileSettings({
+        theme: 'dark',
+        accentColor: '#98cbff',
+        backgroundColor: 'default',
+        onboardingCompleted: true,
+      })
     } catch (err) {
       console.error('Onboarding save error:', err)
     }

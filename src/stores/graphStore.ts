@@ -1,5 +1,9 @@
 import { create } from 'zustand'
-import { supabase } from '../lib/supabase'
+
+function requireApi() {
+  if (!window.electronAPI) throw new Error('Electron API is unavailable')
+  return window.electronAPI
+}
 
 export interface GraphNode {
   id: string;
@@ -37,35 +41,17 @@ export const useGraphStore = create<GraphState>((set) => ({
 
   fetchGraphData: async (projectId: string) => {
     set({ loading: true })
-    
-    // Fetch Nodes
-    const { data: nodesData } = await supabase
-      .from('graph_nodes')
-      .select('*')
-      .eq('project_id', projectId)
-
-    // Fetch Edges
-    const { data: edgesData } = await supabase
-      .from('graph_edges')
-      .select('*')
-      .eq('project_id', projectId)
+    const result = await requireApi().fetchGraphData(projectId)
 
     set({ 
-      nodes: (nodesData as GraphNode[]) || [], 
-      edges: (edgesData as GraphEdge[]) || [],
+      nodes: (result.data?.nodes as GraphNode[]) || [], 
+      edges: (result.data?.edges as GraphEdge[]) || [],
       loading: false 
     })
   },
 
   addNode: async (node) => {
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) return
-
-    const { data, error } = await supabase
-      .from('graph_nodes')
-      .insert({ ...node, user_id: userData.user.id })
-      .select()
-      .single()
+    const { data, error } = await requireApi().addGraphNode(node)
 
     if (!error && data) {
       set((state) => ({ nodes: [...state.nodes, data as GraphNode] }))
