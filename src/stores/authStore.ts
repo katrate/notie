@@ -1,4 +1,7 @@
 import { create } from 'zustand'
+import { useProjectStore } from './projectStore'
+import { useTemplateStore } from './templateStore'
+import { useGraphStore } from './graphStore'
 
 interface AuthState {
   user: PublicUser | null
@@ -10,6 +13,18 @@ interface AuthState {
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   signOut: () => Promise<void>
+}
+
+function clearAllDataStores() {
+  useProjectStore.getState().reset()
+  useTemplateStore.getState().reset()
+  useGraphStore.getState().reset()
+  // Clear localStorage items that hold user-specific data
+  try {
+    localStorage.removeItem('notie-custom-theme')
+    localStorage.removeItem('notie-theme-mode')
+    localStorage.removeItem('notie_recent_colors')
+  } catch {}
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -27,6 +42,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (result?.error) {
       set({ error: result.error, loading: false })
     } else {
+      clearAllDataStores()
       set({ user: null, session: null, loading: false })
     }
   },
@@ -38,7 +54,17 @@ window.electronAPI?.getSession().then((session) => {
   useAuthStore.getState().setLoading(false)
 })
 
+let knownUserId: string | null = null
+
 window.electronAPI?.onAuthStateChanged((session) => {
+  const newUserId = session?.user?.id ?? null
+
+  // If switching users or logging out, wipe cached data
+  if (newUserId !== knownUserId) {
+    knownUserId = newUserId
+    clearAllDataStores()
+  }
+
   useAuthStore.getState().setSession(session)
   useAuthStore.getState().setUser(session?.user ?? null)
   useAuthStore.getState().setLoading(false)

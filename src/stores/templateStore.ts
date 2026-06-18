@@ -33,6 +33,7 @@ interface TemplateState {
   savePageAsTemplate: (pageId: string, name: string, description?: string) => Promise<Template | null>
   updateTemplateStructure: (templateId: string, pageId: string) => Promise<void>
   deleteTemplate: (templateId: string) => Promise<void>
+  reset: () => void
 }
 
 /**
@@ -133,6 +134,7 @@ export const useTemplateStore = create<TemplateState>((set) => ({
     }
   },
 
+  reset: () => set({ templates: [], loading: false, error: null }),
   deleteTemplate: async (templateId: string) => {
     set({ loading: true, error: null })
     const { error } = await requireApi().deleteTemplate(templateId)

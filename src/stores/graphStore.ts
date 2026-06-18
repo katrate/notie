@@ -32,6 +32,7 @@ interface GraphState {
   
   fetchGraphData: (projectId: string) => Promise<void>;
   addNode: (node: Partial<GraphNode>) => Promise<void>;
+  reset: () => void;
 }
 
 export const useGraphStore = create<GraphState>((set) => ({
@@ -50,6 +51,7 @@ export const useGraphStore = create<GraphState>((set) => ({
     })
   },
 
+  reset: () => set({ nodes: [], edges: [], loading: false }),
   addNode: async (node) => {
     const { data, error } = await requireApi().addGraphNode(node)
 

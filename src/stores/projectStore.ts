@@ -150,6 +150,7 @@ interface ProjectState {
   addProjectTag: (projectId: string, name: string, color: string) => Promise<void>;
   removeProjectTag: (projectId: string, name: string) => Promise<void>;
   updateProjectTag: (projectId: string, oldName: string, newName: string, color: string) => Promise<void>;
+  reset: () => void;
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -526,6 +527,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
+  reset: () => set({
+    projects: [],
+    pages: [],
+    activeProjectId: null,
+    activePageId: null,
+    viewMode: 'both' as ViewMode,
+    savedViewMode: 'both' as ViewMode,
+    sidebarVisible: true,
+    pendingGraphLink: null,
+    graphEditorInsert: null,
+    sessionRestored: false,
+    loading: false,
+    error: null,
+  }),
   updateProjectTag: async (projectId: string, oldName: string, newName: string, color: string) => {
     const project = get().projects.find(p => p.id === projectId);
     if (!project) return;
