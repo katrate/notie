@@ -68,6 +68,7 @@
   "build": {
     "appId": "com.notie.dev",
     "productName": "Notie",
+    "npmRebuild": false,
     "publish": {
       "provider": "github",
       "owner": "katrate",
