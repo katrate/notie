@@ -1081,7 +1081,7 @@ async function saveThemeToProfile(customTheme: string, themeMode: string) {
 }
 
 export const useThemeStore = create<ThemeState>((set) => ({
-  customTheme: 'none',
+  customTheme: 'unseen-studio',
   themeMode: 'dark',
   setCustomTheme: (id) => {
     const state = useThemeStore.getState()
@@ -1099,7 +1099,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
     applyCustomTheme(state.customTheme === 'none' ? null : state.customTheme, mode)
   },
   resetToDefault: () => {
-    set({ customTheme: 'none', themeMode: 'dark' })
-    applyCustomTheme(null, 'dark')
+    set({ customTheme: 'unseen-studio', themeMode: 'dark' })
+    applyCustomTheme('unseen-studio', 'dark')
   },
 }))
