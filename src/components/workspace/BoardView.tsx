@@ -36,10 +36,16 @@ const DEFAULT_TAGS: TagDef[] = [
 ];
 
 export function BoardView() {
-  const { pages, activePageId, updatePageContent, projects, setActivePage } = useProjectStore() as any;
-  const activePage = pages.find((p: any) => p.id === activePageId);
-  const project = projects.find((p: any) => p.id === activePage?.project_id);
-  const projectTags: { name: string; color: string }[] = project?.settings?.projectTags || [];
+  const pages = useProjectStore(s => (s as any).pages);
+  const activePageId = useProjectStore(s => (s as any).activePageId);
+  const updatePageContent = useProjectStore(s => (s as any).updatePageContent);
+  const projects = useProjectStore(s => (s as any).projects);
+  const setActivePage = useProjectStore(s => (s as any).setActivePage);
+  const storeUpdatePage = useProjectStore(s => (s as any).updatePage);
+
+  const activePage = React.useMemo(() => pages.find((p: any) => p.id === activePageId), [pages, activePageId]);
+  const project = React.useMemo(() => projects.find((p: any) => p.id === activePage?.project_id), [projects, activePage?.project_id]);
+  const projectTags: { name: string; color: string }[] = React.useMemo(() => project?.settings?.projectTags || [], [project?.settings?.projectTags]);
 
   const [cards, setCards] = useState<Card[]>([]);
   const [columns, setColumns] = useState<ColumnDef[]>([]);
@@ -117,21 +123,23 @@ export function BoardView() {
   ];
 
   useEffect(() => {
-    if (activePage?.content && Array.isArray(activePage.content)) {
-      setCards(activePage.content);
+    const page = pages.find((p: any) => p.id === activePageId);
+    if (page?.content && Array.isArray(page.content)) {
+      setCards(page.content);
     } else {
       setCards([]);
     }
-    if (activePage?.metadata?.boardColumns) {
-      setColumns(activePage.metadata.boardColumns);
+    if (page?.metadata?.boardColumns) {
+      setColumns(page.metadata.boardColumns);
     } else {
       setColumns(DEFAULT_COLUMNS);
     }
-    const pageTags = activePage?.metadata?.boardTags || [];
-    // Merge page-level tags with project-level tags (project tags override defaults)
-    const merged = [...DEFAULT_TAGS.filter(dt => !pageTags.some((pt: any) => pt.name === dt.name) && !projectTags.some((jt: any) => jt.name === dt.name)), ...pageTags, ...projectTags.filter((jt: any) => !pageTags.some((pt: any) => pt.name === jt.name))];
+    const pageTags = page?.metadata?.boardTags || [];
+    const p = projects.find((pr: any) => pr.id === page?.project_id);
+    const pt: { name: string; color: string }[] = p?.settings?.projectTags || [];
+    const merged = [...DEFAULT_TAGS.filter(dt => !pageTags.some((pt2: any) => pt2.name === dt.name) && !pt.some((jt: any) => jt.name === dt.name)), ...pageTags, ...pt.filter((jt: any) => !pageTags.some((pt2: any) => pt2.name === jt.name))];
     setTagDefs(merged);
-  }, [activePage?.content, activePage?.metadata?.boardColumns, activePage?.metadata?.boardTags, activePageId, projectTags]);
+  }, [activePageId, pages, projects]);
 
   useEffect(() => {
     if (editColId && colInputRef.current) colInputRef.current.focus();
@@ -613,16 +621,15 @@ export function BoardView() {
   };
 
   const saveColumns = (newCols: ColumnDef[]) => {
-    setColumns(newCols);
-    if (activePageId) useProjectStore.getState().updatePage(activePageId, {
-      metadata: { ...(activePage?.metadata || {}), boardColumns: newCols }
+    setColumns(newCols);      if (activePageId) storeUpdatePage(activePageId, {
+      metadata: { ...(pages.find((p: any) => p.id === activePageId)?.metadata || {}), boardColumns: newCols }
     });
   };
 
   const saveTagDefs = (defs: TagDef[]) => {
     setTagDefs(defs);
-    if (activePageId) useProjectStore.getState().updatePage(activePageId, {
-      metadata: { ...(activePage?.metadata || {}), boardTags: defs }
+    if (activePageId) storeUpdatePage(activePageId, {
+      metadata: { ...(pages.find((p: any) => p.id === activePageId)?.metadata || {}), boardTags: defs }
     });
   };
 

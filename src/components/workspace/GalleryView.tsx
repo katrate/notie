@@ -40,10 +40,15 @@ function timeAgo(dateStr: string): string {
 }
 
 export function GalleryView() {
-  const { pages, activePageId, updatePageContent, projects } = useProjectStore() as any;
-  const activePage = pages.find((p: any) => p.id === activePageId);
-  const project = projects.find((p: any) => p.id === activePage?.project_id);
-  const projectTags: { name: string; color: string }[] = project?.settings?.projectTags || [];
+  const pages = useProjectStore(s => s.pages);
+  const activePageId = useProjectStore(s => s.activePageId);
+  const updatePageContent = useProjectStore(s => s.updatePageContent);
+  const projects = useProjectStore(s => s.projects);
+  const updatePage = useProjectStore(s => s.updatePage);
+
+  const activePage = useMemo(() => pages.find((p: any) => p.id === activePageId), [pages, activePageId]);
+  const project = useMemo(() => projects.find((p: any) => p.id === activePage?.project_id), [projects, activePage?.project_id]);
+  const projectTags: { name: string; color: string }[] = useMemo(() => project?.settings?.projectTags || [], [project?.settings?.projectTags]);
 
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -74,16 +79,18 @@ export function GalleryView() {
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (activePage?.content && Array.isArray(activePage.content)) {
-      setItems(activePage.content);
+    const page = pages.find((p: any) => p.id === activePageId);
+    if (page?.content && Array.isArray(page.content)) {
+      setItems(page.content);
     } else {
       setItems([]);
     }
-    const pageTags = activePage?.metadata?.galleryTags || [];
-    // Merge page-level tags with project-level tags (project tags override defaults)
-    const merged = [...DEFAULT_TAGS.filter(dt => !pageTags.some((pt: any) => pt.name === dt.name) && !projectTags.some((jt: any) => jt.name === dt.name)), ...pageTags, ...projectTags.filter((jt: any) => !pageTags.some((pt: any) => pt.name === jt.name))];
+    const pageTags = page?.metadata?.galleryTags || [];
+    const p = projects.find((p: any) => p.id === page?.project_id);
+    const pt: { name: string; color: string }[] = p?.settings?.projectTags || [];
+    const merged = [...DEFAULT_TAGS.filter(dt => !pageTags.some((pt2: any) => pt2.name === dt.name) && !pt.some((jt: any) => jt.name === dt.name)), ...pageTags, ...pt.filter((jt: any) => !pageTags.some((pt2: any) => pt2.name === jt.name))];
     setTagDefs(merged);
-  }, [activePage?.content, activePage?.metadata?.galleryTags, activePageId, projectTags]);
+  }, [activePageId, pages, projects]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -100,9 +107,12 @@ export function GalleryView() {
 
   const saveTagDefs = (defs: TagDef[]) => {
     setTagDefs(defs);
-    if (activePageId) useProjectStore.getState().updatePage(activePageId, {
-      metadata: { ...activePage?.metadata, galleryTags: defs }
-    });
+    if (activePageId) {
+      const page = pages.find((p: any) => p.id === activePageId);
+      updatePage(activePageId, {
+        metadata: { ...(page?.metadata || {}), galleryTags: defs }
+      });
+    }
   };
 
   const getTagColor = (name: string): string => {

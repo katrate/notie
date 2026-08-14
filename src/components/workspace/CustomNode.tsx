@@ -1,74 +1,80 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
 
-/* ── Compute contrast text color ── */
-function getContrastColor(hex: string): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.5 ? '#000000' : '#ffffff';
-}
-
 export const CustomNode = React.memo(function CustomNode({ data }: any) {
-  // Convert emoji/Lucide icons to Material Symbols names for display
-  const getDisplayIcon = (icon: string | undefined): string => {
-    if (!icon) return 'description';
-    // Emoji mappings
-    if (icon === '📁') return 'folder';
-    if (icon === '📄') return 'description';
-    // Lucide → Material Symbols mappings (from graph icon names)
-    const lucideToMaterial: Record<string, string> = {
-      'FileText': 'description',
-      'Table2': 'table',
-      'LayoutDashboard': 'dashboard',
-      'PieChart': 'pie_chart',
-      'CheckSquare': 'checklist',
-      'Images': 'photo_library',
-      'Database': 'database',
-      'Label': 'label',
-      'Folder': 'folder',
-      'Hash': 'tag',
-      'Timeline': 'timeline',
-    };
-    if (lucideToMaterial[icon]) return lucideToMaterial[icon];
-    return icon; // assume it's already a Material Symbols name
-  };
+  if (data.isFolderGroup) {
+    return (
+      <div className="bg-primary/5 border border-primary/20 rounded-2xl pointer-events-none" style={{ width: '100%', height: '100%' }} />
+    );
+  }
 
-  const displayIcon = getDisplayIcon(data.icon);
-
-  // Support both Tailwind classes and direct hex colors
-  const hasHexColor = data.backgroundColor && typeof data.backgroundColor === 'string' && data.backgroundColor.startsWith('#');
-  const iconContainerClass = hasHexColor ? '' : (data.color || 'bg-primary/20 text-primary');
-  const iconContainerStyle = hasHexColor
-    ? { backgroundColor: data.backgroundColor, color: data.textColor || getContrastColor(data.backgroundColor) }
-    : {};
+  const [hovered, setHovered] = useState(false);
+  const bgColor = data.backgroundColor || '#98cbff';
+  const label = data.label || '';
+  const NODE_SIZE = 36;
+  const RADIUS = NODE_SIZE / 2;
 
   return (
     <div
-      className="px-3 py-3 shadow-md rounded-xl bg-surface border flex flex-col items-center gap-2 group hover:border-primary/50 transition-colors min-w-[90px]"
-      style={{
-        borderColor: data.imgUrl ? 'rgba(6, 182, 212, 0.3)' : (hasHexColor ? data.backgroundColor + '60' : 'rgba(255,255,255,0.2)'),
-      }}
+      className="relative"
+      style={{ width: NODE_SIZE, height: NODE_SIZE }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      <Handle type="target" position={Position.Top} className="custom-handle target-handle opacity-30 group-hover:opacity-100" />
-      
-      {data.imgUrl ? (
-        <div className="w-10 h-10 rounded-lg overflow-hidden bg-surface-variant flex-shrink-0 graph-node-img">
-          <img src={data.imgUrl} alt="" className="w-full h-full object-cover" />
-        </div>
-      ) : (
-        <div className={`flex items-center justify-center p-2 rounded-lg graph-node-icon ${iconContainerClass}`} style={iconContainerStyle}>
-          <span className="material-symbols-outlined text-2xl">{displayIcon}</span>
-        </div>
-      )}
-      
-      <div className="flex flex-col items-center text-center">
-        <div className="text-sm font-semibold text-on-surface line-clamp-2 leading-tight">{data.label}</div>
-        {data.subLabel && <div className="text-[10px] text-on-surface-variant mt-0.5">{data.subLabel}</div>}
-      </div>
+      {/* Shared center handle — invisible, both source and target at the same center point.
+          CustomAnimatedEdge uses circleIntersect to draw the actual line to the sphere perimeter. */}
+      <Handle
+        type="source"
+        position={Position.Top}
+        id="center"
+        style={{
+          position: 'absolute', top: RADIUS, left: RADIUS,
+          width: 1, height: 1, opacity: 0, pointerEvents: 'all', zIndex: 10,
+          transform: 'translate(-50%, -50%)',
+        }}
+      />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="t-center"
+        style={{
+          position: 'absolute', top: RADIUS, left: RADIUS,
+          width: 1, height: 1, opacity: 0, zIndex: 10,
+          transform: 'translate(-50%, -50%)',
+        }}
+      />
 
-      <Handle type="source" position={Position.Bottom} className="custom-handle source-handle opacity-30 group-hover:opacity-100" />
+      {/* Connection guide dots on hover — show NSEW perimeter hints */}
+      {hovered && (
+        <>
+          <div className="sphere-connection-dot" style={{ top: -2, left: '50%', marginLeft: -2, background: bgColor }} />
+          <div className="sphere-connection-dot" style={{ bottom: -2, left: '50%', marginLeft: -2, background: bgColor }} />
+          <div className="sphere-connection-dot" style={{ left: -2, top: '50%', marginTop: -2, background: bgColor }} />
+          <div className="sphere-connection-dot" style={{ right: -2, top: '50%', marginTop: -2, background: bgColor }} />
+        </>
+      )}
+
+      {/* Sphere */}
+      <div
+        className={`rounded-full graph-sphere ${hovered ? 'graph-sphere-hovered' : ''}`}
+        style={{
+          width: NODE_SIZE, height: NODE_SIZE,
+          backgroundColor: bgColor,
+          boxShadow: hovered
+            ? `0 0 20px ${bgColor}80, 0 0 60px ${bgColor}30`
+            : `0 0 10px ${bgColor}40`,
+          transform: hovered ? 'scale(1.12)' : 'scale(1)',
+          transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease',
+          cursor: 'pointer',
+        }}
+      >
+        {/* Label tooltip on hover */}
+        {hovered && label && (
+          <div className="sphere-tooltip">
+            {label}
+          </div>
+        )}
+      </div>
     </div>
   );
 });

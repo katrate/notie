@@ -159,8 +159,9 @@ function PlaybackVisualizer({ analyserRef, isPlaying }: { analyserRef: React.Mut
 /* ── Component ── */
 
 export function AudioView() {
-  const { pages, activePageId, updatePageContent } = useProjectStore()
-  const activePage = pages.find(p => p.id === activePageId)
+  const pages = useProjectStore(s => s.pages)
+  const activePageId = useProjectStore(s => s.activePageId)
+  const updatePageContent = useProjectStore(s => s.updatePageContent)
 
   const [clips, setClips] = useState<AudioClip[]>([])
   const [recording, setRecording] = useState(false)
@@ -182,12 +183,13 @@ export function AudioView() {
 
   // Load clips from page content
   useEffect(() => {
-    if (activePage?.content && Array.isArray(activePage.content)) {
-      setClips(activePage.content as AudioClip[])
+    const page = pages.find(p => p.id === activePageId)
+    if (page?.content && Array.isArray(page.content)) {
+      setClips(page.content as AudioClip[])
     } else {
       setClips([])
     }
-  }, [activePage?.content, activePageId])
+  }, [activePageId, pages])
 
   // Save clips to page content
   const saveClips = useCallback((newClips: AudioClip[]) => {

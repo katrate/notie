@@ -26,8 +26,10 @@ function getDateLabel(date: string): string {
 }
 
 export function TimelineView() {
-  const { pages, activePageId, updatePageContent } = useProjectStore();
-  const activePage = pages.find(p => p.id === activePageId);
+  const pages = useProjectStore(s => s.pages);
+  const activePageId = useProjectStore(s => s.activePageId);
+  const updatePageContent = useProjectStore(s => s.updatePageContent);
+  const activePage = useMemo(() => pages.find(p => p.id === activePageId), [pages, activePageId]);
 
   const [blocks, setBlocks] = useState<TimeBlock[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -49,17 +51,16 @@ export function TimelineView() {
   // ── Delete confirmation ──
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // ── Link confirmation ──
-  const [linkConfirm, setLinkConfirm] = useState<{ blockId: string; pageId: string; pageTitle: string } | null>(null);
 
   // ── Sync blocks from store ──
   useEffect(() => {
-    if (activePage?.content && Array.isArray(activePage.content)) {
-      setBlocks(activePage.content as TimeBlock[]);
+    const page = pages.find(p => p.id === activePageId);
+    if (page?.content && Array.isArray(page.content)) {
+      setBlocks(page.content as TimeBlock[]);
     } else {
       setBlocks([]);
     }
-  }, [activePage?.content, activePageId]);
+  }, [activePageId, pages]);
 
   // ── Save blocks to store ──
   const saveBlocks = useCallback((newBlocks: TimeBlock[]) => {
@@ -428,7 +429,7 @@ export function TimelineView() {
                               filteredPages.map(p => (
                                 <button
                                   key={p.id}
-                                  onClick={() => setLinkConfirm({ blockId: block.id, pageId: p.id, pageTitle: p.title || 'Untitled' })}
+                                  onClick={() => { linkPageToBlock(block.id, p.id); }}
                                   className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-primary/10 transition-colors text-xs text-on-surface"
                                 >
                                   <span className="material-symbols-outlined text-[12px] text-on-surface-variant/60">
@@ -589,38 +590,6 @@ export function TimelineView() {
                 className="px-4 py-2 rounded-lg bg-error text-white hover:bg-error/90 transition-colors text-sm font-medium"
               >
                 Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Link confirmation modal ── */}
-      {linkConfirm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[65] flex items-center justify-center p-4" onClick={() => setLinkConfirm(null)}>
-          <div className="bg-surface border border-outline/20 rounded-xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-on-surface mb-2">Link "{linkConfirm.pageTitle}"</h3>
-            <p className="text-sm text-on-surface-variant mb-5">
-              Link this page to the timeline block.
-            </p>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => { linkPageToBlock(linkConfirm.blockId, linkConfirm.pageId); setLinkConfirm(null); }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all text-left"
-              >
-                <span className="material-symbols-outlined text-[20px]">link</span>
-                <div>
-                  <p className="text-sm font-semibold">Link to Block</p>
-                  <p className="text-[11px] text-primary/70">Connect this page to the timeline block in the graph</p>
-                </div>
-              </button>
-            </div>
-            <div className="flex justify-end mt-4 pt-3 border-t border-outline/10">
-              <button
-                onClick={() => setLinkConfirm(null)}
-                className="px-4 py-2 rounded-lg text-on-surface-variant hover:bg-on-surface/10 transition-colors text-sm font-medium"
-              >
-                Cancel
               </button>
             </div>
           </div>

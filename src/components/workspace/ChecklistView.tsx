@@ -227,8 +227,12 @@ function isOverdue(dueDateString: string | null | undefined): boolean {
 }
 
 export function ChecklistView() {
-  const { pages, activePageId, updatePageContent, updatePage } = useProjectStore() as any;
-  const activePage = pages.find((p: any) => p.id === activePageId);
+  const pages = useProjectStore(s => (s as any).pages);
+  const activePageId = useProjectStore(s => (s as any).activePageId);
+  const updatePageContent = useProjectStore(s => (s as any).updatePageContent);
+  const updatePage = useProjectStore(s => (s as any).updatePage);
+
+  const activePage = React.useMemo(() => pages.find((p: any) => p.id === activePageId), [pages, activePageId]);
 
   const showTasksInGraph = activePage?.metadata?.showTasksInGraph ?? false;
   const sortMode = activePage?.metadata?.sortMode || 'default';
@@ -240,12 +244,13 @@ export function ChecklistView() {
   const [newPriority, setNewPriority] = useState(3);
 
   useEffect(() => {
-    if (activePage?.content && Array.isArray(activePage.content)) {
-      setTodos(activePage.content);
+    const page = pages.find((p: any) => p.id === activePageId);
+    if (page?.content && Array.isArray(page.content)) {
+      setTodos(page.content);
     } else {
       setTodos([]);
     }
-  }, [activePage?.content, activePageId]);
+  }, [activePageId, pages]);
 
   const saveContent = (newTodos: any[]) => {
     setTodos(newTodos);

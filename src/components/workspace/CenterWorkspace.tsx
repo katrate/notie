@@ -251,13 +251,13 @@ export function CenterWorkspace() {
                     />
                   </div>
                 )}
-                   <div className="flex-shrink-0 relative">
-                     <TemplateActions pageId={activePageId} />
-                   </div>
-                 </div>
-                 {activePageId && activeProjectId && <PageTagsBar pageId={activePageId} projectId={activeProjectId} />}
-               </div>
-               {/* Full-width canvas */}
+                    <div className="flex-shrink-0 relative">
+                       <TemplateActions pageId={activePageId} />
+                     </div>
+                  </div>
+                  {activePageId && activeProjectId && <PageTagsBar pageId={activePageId} projectId={activeProjectId} />}
+                </div>
+                {/* Full-width canvas */}
                <div className="px-6 lg:px-8 pb-6 flex-1 min-h-[500px]">
                  <CanvasView />
                </div>
@@ -358,11 +358,11 @@ export function CenterWorkspace() {
                        />
                      </div>
                    )}
-                   {activePageId && activePage?.type !== 'dashboard' && (
-                     <div className="flex-shrink-0 relative ml-auto">
-                       <TemplateActions pageId={activePageId} />
-                     </div>
-                   )}
+                    {activePageId && activePage?.type !== 'dashboard' && (
+                      <div className="flex-shrink-0 relative ml-auto">
+                        <TemplateActions pageId={activePageId} editor={(activePage?.type === 'text' || !activePage?.type) ? editorInstance : null} />
+                      </div>
+                    )}
                  </div>
 
                  {/* Tags */}

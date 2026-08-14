@@ -49,11 +49,37 @@ export const PageNode = React.memo(function PageNode({ id, data }: any) {
 
   return (
     <div className="shadow-md rounded-xl bg-surface border border-outline/20 overflow-hidden min-w-[140px] relative">
-      {/* Top target handle — connect to this page from above */}
+      {/* Sphere connection handle — small circle on top connecting to the project sphere */}
       <Handle
         type="target"
         position={Position.Top}
-        className="custom-handle target-handle opacity-0 hover:opacity-100"
+        id="sphere-target"
+        className="!bg-transparent"
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          position: 'absolute',
+          top: -4,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: bgColor + '80',
+          border: `2px solid ${bgColor}`,
+          zIndex: 10,
+          cursor: 'pointer',
+          transition: 'all 0.15s ease',
+          opacity: 0.6,
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.opacity = '1';
+          (e.currentTarget as HTMLElement).style.transform = 'translateX(-50%) scale(1.3)';
+          (e.currentTarget as HTMLElement).style.boxShadow = `0 0 8px ${bgColor}80`;
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.opacity = '0.6';
+          (e.currentTarget as HTMLElement).style.transform = 'translateX(-50%)';
+          (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+        }}
       />
 
       {/* Title bar with left/right circular handles */}

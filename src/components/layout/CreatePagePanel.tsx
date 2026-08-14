@@ -104,6 +104,11 @@ export function CreatePagePanel({ onClose, projectId }: CreatePagePanelProps) {
     // Apply tags from template to the created page
     await applyTagsToPage(page.id, node.tags);
 
+    // Restore content if the template includes it
+    if (node.content) {
+      await useProjectStore.getState().updatePageContent(page.id, JSON.parse(JSON.stringify(node.content)));
+    }
+
     // Create child pages recursively
     for (const child of node.children) {
       await createFromNode(child, page.id);

@@ -11,6 +11,7 @@ export interface TemplateNode {
   icon: string
   type: string
   tags?: string[]
+  content?: any
   children: TemplateNode[]
 }
 
@@ -30,17 +31,17 @@ interface TemplateState {
   loading: boolean
   error: string | null
   fetchTemplates: () => Promise<void>
-  savePageAsTemplate: (pageId: string, name: string, description?: string) => Promise<Template | null>
-  updateTemplateStructure: (templateId: string, pageId: string) => Promise<void>
+  savePageAsTemplate: (pageId: string, name: string, description?: string, includeContent?: boolean) => Promise<Template | null>
+  updateTemplateStructure: (templateId: string, pageId: string, includeContent?: boolean) => Promise<void>
   deleteTemplate: (templateId: string) => Promise<void>
   reset: () => void
 }
 
 /**
  * Recursively build a template structure tree from a page and its descendants.
- * Strips out content/data – only captures title, icon, type, and child structure.
+ * When includeContent is true, also captures the page content/data.
  */
-function buildStructure(pageId: string, allPages: Page[]): TemplateNode {
+function buildStructure(pageId: string, allPages: Page[], includeContent = false): TemplateNode {
   const page = allPages.find(p => p.id === pageId)
   if (!page) return { title: 'Untitled', icon: 'description', type: 'text', children: [] }
 
@@ -53,7 +54,8 @@ function buildStructure(pageId: string, allPages: Page[]): TemplateNode {
     icon: page.icon || 'description',
     type: page.type || 'text',
     tags: page.metadata?.tags?.length ? [...page.metadata.tags] : undefined,
-    children: children.map(child => buildStructure(child.id, allPages)),
+    ...(includeContent && page.content ? { content: JSON.parse(JSON.stringify(page.content)) } : {}),
+    children: children.map(child => buildStructure(child.id, allPages, includeContent)),
   }
 }
 
@@ -73,7 +75,7 @@ export const useTemplateStore = create<TemplateState>((set) => ({
     }
   },
 
-  savePageAsTemplate: async (pageId: string, name: string, description = ''): Promise<Template | null> => {
+  savePageAsTemplate: async (pageId: string, name: string, description = '', includeContent = false): Promise<Template | null> => {
     set({ loading: true, error: null })
 
     const allPages = useProjectStore.getState().pages
@@ -83,7 +85,7 @@ export const useTemplateStore = create<TemplateState>((set) => ({
       return null
     }
 
-    const structure = buildStructure(pageId, allPages)
+    const structure = buildStructure(pageId, allPages, includeContent)
 
     const { data, error } = await requireApi().createTemplate({
       name,
@@ -102,7 +104,7 @@ export const useTemplateStore = create<TemplateState>((set) => ({
     return template
   },
 
-  updateTemplateStructure: async (templateId: string, pageId: string) => {
+  updateTemplateStructure: async (templateId: string, pageId: string, includeContent = false) => {
     set({ loading: true, error: null })
 
     const allPages = useProjectStore.getState().pages
@@ -112,7 +114,7 @@ export const useTemplateStore = create<TemplateState>((set) => ({
       return
     }
 
-    const structure = buildStructure(pageId, allPages)
+    const structure = buildStructure(pageId, allPages, includeContent)
 
     const { error } = await requireApi().updateTemplate({
       templateId,

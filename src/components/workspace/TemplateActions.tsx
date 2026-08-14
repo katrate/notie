@@ -1,20 +1,24 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTemplateStore } from '../../stores/templateStore'
+import { useProjectStore } from '../../stores/projectStore'
 import { Tooltip } from '../Tooltip'
 
 interface TemplateActionsProps {
   pageId: string
+  editor?: any
 }
 
-export function TemplateActions({ pageId }: TemplateActionsProps) {
+export function TemplateActions({ pageId, editor }: TemplateActionsProps) {
   const [showPopover, setShowPopover] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [templateDesc, setTemplateDesc] = useState('')
   const [saving, setSaving] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+  const [includeContent, setIncludeContent] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const toggleRef = useRef<HTMLButtonElement>(null)
 
   const { savePageAsTemplate } = useTemplateStore()
 
@@ -27,13 +31,14 @@ export function TemplateActions({ pageId }: TemplateActionsProps) {
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setShowPopover(false)
-        setTemplateName('')
-        setTemplateDesc('')
-        setSuccessMsg('')
-        setErrorMsg('')
-      }
+      if (!popoverRef.current) return
+      if (popoverRef.current.contains(e.target as Node)) return
+      if (toggleRef.current && toggleRef.current.contains(e.target as Node)) return
+      setShowPopover(false)
+      setTemplateName('')
+      setTemplateDesc('')
+      setSuccessMsg('')
+      setErrorMsg('')
     }
     if (showPopover) {
       document.addEventListener('mousedown', handler)
@@ -43,10 +48,17 @@ export function TemplateActions({ pageId }: TemplateActionsProps) {
 
   const handleSave = async () => {
     if (!templateName.trim()) return
+
+    // Flush editor content to store before reading it for the template
+    if (includeContent && editor?.getJSON) {
+      const latestContent = editor.getJSON()
+      await useProjectStore.getState().updatePageContent(pageId, latestContent)
+    }
+
     setSaving(true)
     setSuccessMsg('')
     setErrorMsg('')
-    const result = await savePageAsTemplate(pageId, templateName.trim(), templateDesc.trim())
+    const result = await savePageAsTemplate(pageId, templateName.trim(), templateDesc.trim(), includeContent)
     setSaving(false)
     if (result) {
       setSuccessMsg(`Template "${templateName.trim()}" saved!`)
@@ -61,7 +73,20 @@ export function TemplateActions({ pageId }: TemplateActionsProps) {
   }
 
   return (
-    <div className="relative">
+    <div className="relative flex items-center gap-1">
+      <Tooltip label={includeContent ? 'Including content' : 'Structure only'} position="bottom">
+        <button
+          ref={toggleRef}
+          onClick={() => setIncludeContent(!includeContent)}
+          className={`w-7 h-7 rounded-full flex items-center justify-center text-[13px] transition-all border ${
+            includeContent
+              ? 'bg-primary/20 border-primary/40 text-primary'
+              : 'bg-transparent border-outline/20 text-on-surface-variant/50 hover:text-on-surface-variant hover:border-outline/40'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[14px]">data_array</span>
+        </button>
+      </Tooltip>
       <Tooltip label="Save as template" position="bottom">
         <button
           onClick={() => setShowPopover(!showPopover)}
@@ -93,7 +118,10 @@ export function TemplateActions({ pageId }: TemplateActionsProps) {
 
               <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-3">Save as Template</p>
               <p className="text-[11px] text-on-surface-variant/70 mb-3">
-                Saves the page structure (title, icon, type, tags, and children) — no content/data is included.
+                {includeContent
+                  ? 'Saves the page structure and all content/data.'
+                  : 'Saves the page structure (title, icon, type, tags, and children) — no content/data is included.'
+                }
               </p>
 
               <input

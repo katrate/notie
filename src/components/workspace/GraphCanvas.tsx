@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { RotateCcw } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
 import { ReactFlow, Background, Controls, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider } from '@xyflow/react';
@@ -9,7 +10,6 @@ import { ValueNode } from './ValueNode';
 import { PageNode } from './PageNode';
 import { CustomAnimatedEdge } from './CustomAnimatedEdge';
 import dagre from '@dagrejs/dagre';
-import * as d3 from 'd3-force';
 import { Tooltip } from '../Tooltip';
 
 const nodeTypes = { custom: CustomNode, rowNode: RowNode, valueNode: ValueNode, pageNode: PageNode };
@@ -72,7 +72,7 @@ function getPrimaryRgba(opacity: number = 0.4): string {
 }
 
 function getNodeDimensions(id: string, data?: any): { width: number; height: number } {
-  if (id.startsWith('proj-')) return { width: 160, height: 70 };
+  if (id.startsWith('proj-')) return { width: 36, height: 36 };
   if (id.startsWith('page-')) {
     const sockCount = data?.sockets?.length || 0;
     return { width: 160, height: 50 + sockCount * 28 };
@@ -154,189 +154,6 @@ function layoutNodesWithDagre(nodes: any[], edges: any[]): any[] {
   });
 }
 
-function layoutNodesWithForce(nodes: any[], edges: any[]): any[] {
-  const simNodes = nodes.map(n => {
-    const { width, height } = getNodeDimensions(n.id, n.data);
-    return { ...n, x: n.position.x || 0, y: n.position.y || 0, width, height };
-  });
-  const simEdges = edges.map(e => ({ ...e, source: e.source, target: e.target }));
-
-  const simulation = d3.forceSimulation(simNodes)
-    .force('charge', d3.forceManyBody().strength(-800))
-    .force('link', d3.forceLink(simEdges).id((d: any) => d.id).distance(200))
-    .force('collide', d3.forceCollide().radius((d: any) => Math.max(d.width, d.height) / 2 + 20))
-    .force('center', d3.forceCenter(0, 0))
-    .stop();
-
-  // Run the simulation synchronously for 300 ticks to get a stable layout
-  for (let i = 0; i < 300; ++i) {
-    simulation.tick();
-  }
-
-  return simNodes.map(n => ({
-    ...nodes.find(orig => orig.id === n.id),
-    position: {
-      x: n.x - n.width / 2,
-      y: n.y - n.height / 2,
-    },
-  }));
-}
-
-/**
- * Radial tree layout using subtree angular allocation.
- * Each node gets angular space proportional to its leaf-descendant count,
- * so children of the same parent are clustered together — far less messy
- * than evenly distributing nodes at each depth level.
- *
- * Improvements over basic radial layout:
- *  - Root node centered at origin for a true tree-like appearance
- *  - Angular padding between sibling groups to prevent label overlap
- *  - Siblings sorted by subtree size for cleaner contiguous grouping
- *  - Dynamic ring spacing based on node dimensions and count
- *  - Start angle offset (-PI/2) so first child sits at top for better visual balance
- */
-function layoutNodesCircular(nodes: any[], edges: any[]): any[] {
-  if (nodes.length === 0) return nodes;
-
-  // ── 1. Build tree structure ──
-  const structuralEdges = edges.filter(
-    e => !e.id.startsWith('edge-linkblock-') && !e.id.startsWith('edge-table-link-')
-  );
-
-  const indegree = new Map<string, number>();
-  const children = new Map<string, string[]>();
-  nodes.forEach(n => { indegree.set(n.id, 0); children.set(n.id, []); });
-  structuralEdges.forEach(e => {
-    indegree.set(e.target, (indegree.get(e.target) || 0) + 1);
-    if (!children.has(e.source)) children.set(e.source, []);
-    children.get(e.source)!.push(e.target);
-  });
-
-  // ── 2. BFS depth from root(s) ──
-  const depth = new Map<string, number>();
-  const roots = nodes.filter(n => (indegree.get(n.id) || 0) === 0);
-  const queue: string[] = [];
-  (roots.length ? roots : [nodes[0]]).forEach(r => { depth.set(r.id, 0); queue.push(r.id); });
-
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    const d = depth.get(current) || 0;
-    for (const child of children.get(current) || []) {
-      if (!depth.has(child)) { depth.set(child, d + 1); queue.push(child); }
-    }
-  }
-  nodes.forEach(n => { if (!depth.has(n.id)) depth.set(n.id, 1); });
-
-  // ── 3. Count leaf-descendants per node (subtree angular weight) ──
-  const leafCount = new Map<string, number>();
-  function countLeafs(id: string): number {
-    if (leafCount.has(id)) return leafCount.get(id)!;
-    const childList = children.get(id) || [];
-    if (childList.length === 0) { leafCount.set(id, 1); return 1; }
-    const total = childList.reduce((s, c) => s + countLeafs(c), 0);
-    leafCount.set(id, total || 1);
-    return leafCount.get(id)!;
-  }
-  nodes.forEach(n => countLeafs(n.id));
-
-  // Sort children of each node by leaf count descending for cleaner grouping
-  for (const [, childList] of children.entries()) {
-    childList.sort((a, b) => (leafCount.get(b) || 1) - (leafCount.get(a) || 1));
-  }
-
-  // ── 4. Assign angular spans (subtree-proportional) ──
-  const angStart = new Map<string, number>();
-  const angSpan = new Map<string, number>();
-  const ANGULAR_PADDING = 0.025; // minimum gap between sibling groups (radians)
-
-  function assignAngles(id: string, start: number, span: number) {
-    angStart.set(id, start);
-    angSpan.set(id, span);
-    const childList = children.get(id) || [];
-    if (childList.length === 0) return;
-    const childLeafSum = childList.reduce((s, c) => s + (leafCount.get(c) || 1), 0) || 1;
-    // Reserve padding between children
-    const totalPadding = ANGULAR_PADDING * childList.length;
-    const availableSpan = Math.max(span - totalPadding, 0.001);
-    let curr = start;
-    for (let i = 0; i < childList.length; i++) {
-      const child = childList[i];
-      const childSpan = availableSpan * ((leafCount.get(child) || 1) / childLeafSum);
-      assignAngles(child, curr, childSpan);
-      curr += childSpan + ANGULAR_PADDING;
-    }
-  }
-
-  const rootLeafSum = roots.reduce((s, r) => s + (leafCount.get(r.id) || 1), 0) || 1;
-  let currAngle = 0;
-  for (const root of roots.length ? roots : [nodes[0]]) {
-    const span = (2 * Math.PI) * ((leafCount.get(root.id) || 1) / rootLeafSum);
-    assignAngles(root.id, currAngle, span);
-    currAngle += span;
-  }
-
-  // ── 5. Compute dynamic radii per depth ──
-  const maxDepth = Math.max(...Array.from(depth.values()), 0);
-  const depthCount = new Map<number, number>();
-  nodes.forEach(n => {
-    const d = depth.get(n.id) || 0;
-    depthCount.set(d, (depthCount.get(d) || 0) + 1);
-  });
-
-  const avgWidth = 130;
-  const nodePadding = 50;
-  const minRingSpacing = 130; // minimum space between rings
-
-  const depthRadii = new Map<number, number>();
-  // Depth 0: root at center
-  depthRadii.set(0, 0);
-
-  // For other depths, ensure enough circumference to fit all nodes
-  for (let d = 1; d <= maxDepth; d++) {
-    const count = depthCount.get(d) || 1;
-    const minCircum = count * (avgWidth + nodePadding);
-    const minRadiusForDepth = minCircum / (2 * Math.PI);
-    // Also ensure at least minRingSpacing from previous ring
-    const prevRadius = depthRadii.get(d - 1) || 0;
-    const minRadiusBySpacing = prevRadius + minRingSpacing;
-    depthRadii.set(d, Math.max(minRadiusForDepth, minRadiusBySpacing));
-  }
-
-  // ── 6. Position each node at the midpoint of its angular span ──
-  // Offset all angles by -PI/2 so the layout starts at the top, giving a more
-  // natural tree/organization-chart look
-  const ANGLE_OFFSET = -Math.PI / 2;
-
-  return nodes.map(node => {
-    const d = depth.get(node.id) || 0;
-    const { width, height } = getNodeDimensions(node.id, node.data);
-
-    if (d === 0) {
-      // Root node centered at origin
-      return {
-        ...node,
-        position: {
-          x: -(width || 160) / 2,
-          y: -(height || 70) / 2,
-        },
-      };
-    }
-
-    const start = angStart.get(node.id) || 0;
-    const span = angSpan.get(node.id) || (2 * Math.PI / nodes.length);
-    const r = depthRadii.get(d) || d * minRingSpacing + 30;
-    const angle = ANGLE_OFFSET + start + span / 2;
-
-    return {
-      ...node,
-      position: {
-        x: r * Math.cos(angle) - (width || 130) / 2,
-        y: r * Math.sin(angle) - (height || 50) / 2,
-      },
-    };
-  });
-}
-
 interface GraphCanvasProps {
   projectId: string;
 }
@@ -403,6 +220,23 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
   const edgesRef = useRef<any[]>([]);
   edgesRef.current = edges;
 
+  // ── Right-click context menu for page nodes ──
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    nodeId: string;
+    pageId: string;
+    hasParent: boolean;
+    hasPreviousParent: boolean;
+  } | null>(null);
+
+  // Close context menu on any click
+  useEffect(() => {
+    const close = () => setContextMenu(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, []);
+
   // ── Graph connection confirmation popup state ──
   const [graphLinkConfirm, setGraphLinkConfirm] = useState<{
     type: 'page-page' | 'timeline-page' | 'page-timeline';
@@ -421,15 +255,12 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
     const projectPages = pages.filter(p => p.project_id === projectId)
       .sort((a, b) => (new Date((a as any).created_at || 0)).getTime() - (new Date((b as any).created_at || 0)).getTime());
     return projectPages.map(p =>
-      `${p.id}:${p.type}:${p.metadata?.parentId || ''}:${p.title || ''}:${Array.isArray(p.content) ? p.content.length : (typeof p.content === 'object' ? 'o' : '0')}:gv=${(p.metadata?.graphVisibleColumns || []).join(',')}:sb=${(p.metadata?.sortByColIds || []).join(',')}:st=${p.metadata?.showTasksInGraph ? '1' : '0'}:sm=${p.metadata?.sortMode || 'default'}:${(Array.isArray(p.content) && p.type === 'checklist') ? p.content.map((t: any) => t.id + (t.completed ? '1' : '0') + (t.priority || '3') + (t.dueDate || '')).join(',') : ''}:${(Array.isArray(p.content) && p.type === 'gallery') ? p.content.map((t: any) => t.id + (t.title || '')).join(',') : ''}:${(Array.isArray(p.content) && p.type === 'board') ? p.content.map((t: any) => t.id + (t.title || '') + (t.columnId || '')).join(',') : ''}:      bc=${(p.metadata?.boardColumns || []).map((c: any) => c.id + c.title).join(',')}:tbl=${p.type === 'table' && Array.isArray(p.content) ? p.content.map((r: any) => Object.entries(r).map(([k, v]) => k + ':' + v).join(';')).join('||') : ''}`
+      `${p.id}:${p.type}:${p.metadata?.parentId || ''}:${p.metadata?.unlinkedFromGraph ? '1' : '0'}:${p.title || ''}:${Array.isArray(p.content) ? p.content.length : (typeof p.content === 'object' ? 'o' : '0')}:gv=${(p.metadata?.graphVisibleColumns || []).join(',')}:sb=${(p.metadata?.sortByColIds || []).join(',')}:st=${p.metadata?.showTasksInGraph ? '1' : '0'}:sm=${p.metadata?.sortMode || 'default'}:${(Array.isArray(p.content) && p.type === 'checklist') ? p.content.map((t: any) => t.id + (t.completed ? '1' : '0') + (t.priority || '3') + (t.dueDate || '')).join(',') : ''}:${(Array.isArray(p.content) && p.type === 'gallery') ? p.content.map((t: any) => t.id + (t.title || '')).join(',') : ''}:${(Array.isArray(p.content) && p.type === 'board') ? p.content.map((t: any) => t.id + (t.title || '') + (t.columnId || '')).join(',') : ''}:      bc=${(p.metadata?.boardColumns || []).map((c: any) => c.id + c.title).join(',')}:tbl=${p.type === 'table' && Array.isArray(p.content) ? p.content.map((r: any) => Object.entries(r).map(([k, v]) => k + ':' + v).join(';')).join('||') : ''}`
     ).join('|');
   }, [projectId, pages]);
 
   // ── Project-level data (name, icon, saved positions/viewport) ──
   const project = useMemo(() => projects.find(p => p.id === projectId), [projectId, projects]);
-
-  // ── Graph layout mode: 'hierarchy' (dagre) or 'circular' ──
-  const graphLayoutMode = project?.settings?.graphLayoutMode || 'hierarchy';
 
   // ── Dagre layout cache: only recompute when structure changes ──
   const dagreLayoutRef = useRef<{ key: string; nodes: any[] }>({ key: '', nodes: [] });
@@ -463,7 +294,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
       data: { 
         label: project.name, 
         icon: project.icon || 'folder',
-        color: 'bg-primary/30 text-primary border-primary/50 border shadow-primary-glow' 
+        backgroundColor: '#98cbff' 
       },
       position: { x: 0, y: 0 },
     });
@@ -533,17 +364,22 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
       }
       const sourceId = parentId ? `page-${parentId}` : `proj-${project.id}`;
 
-      newEdges.push({
-        id: `edge-${sourceId}-${page.id}`,
-        source: sourceId,
-        target: `page-${page.id}`,
-        animated: true,
-        style: { stroke: getPrimaryRgba(0.4), strokeWidth: 2 },
-      });          try {
+      // Skip parent edge if page was unlinked from hierarchy via right-click
+      if (!page.metadata?.unlinkedFromGraph) {
+        newEdges.push({
+          id: `edge-${sourceId}-${page.id}`,
+          type: 'customAnimated',
+          source: sourceId,
+          target: `page-${page.id}`,
+          ...(sourceId.startsWith('proj-') ? { targetHandle: 'sphere-target' } : {}),
+          animated: true,
+          style: { stroke: getPrimaryRgba(0.4), strokeWidth: 2 },
+        });
+      }          try {
         if ((page.type === 'text' || !page.type) && page.content && typeof page.content === 'object') {
           buildTextSubGraph(page, projectPages, newNodes, newEdges, projectTags);
         } else if (page.type === 'table' && Array.isArray(page.content)) {
-          buildTableSubGraph(page, projectPages, newNodes, newEdges);
+          buildTableSubGraph(page, newNodes, newEdges, projectPages);
         } else if (page.type === 'checklist' && page.metadata?.showTasksInGraph && Array.isArray(page.content)) {
           buildChecklistSubGraph(page, newNodes, newEdges);
         } else if (page.type === 'gallery' && Array.isArray(page.content)) {
@@ -571,14 +407,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
     
     let laidOutNodes: any[];
     
-    if (graphLayoutMode === 'circular') {
-      // Circular layout — computed fresh each time (caching not needed, it's fast)
-      laidOutNodes = layoutNodesCircular(newNodes, hierarchyEdges);
-    } else if (graphLayoutMode === 'force') {
-      // Force layout
-      laidOutNodes = layoutNodesWithForce(newNodes, hierarchyEdges);
-    } else {
-      // Dagre (hierarchy) layout — cached when structure unchanged
+    // Dagre (hierarchy) layout — cached when structure unchanged
       if (dagreLayoutRef.current.key === structureKey) {
         const cache = dagreLayoutRef.current.nodes;
         const allCached = newNodes.every(n => cache.some((c: any) => c.id === n.id));
@@ -595,7 +424,6 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
         laidOutNodes = layoutNodesWithDagre(newNodes, hierarchyEdges);
         dagreLayoutRef.current = { key: structureKey, nodes: laidOutNodes.map(n => ({ id: n.id, position: { x: n.position.x, y: n.position.y } })) };
       }
-    }
 
     // Apply saved positions (override layout) — read from ref to avoid project dependency
     const savedPositions = savedPositionsRef.current;
@@ -1557,29 +1385,67 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
     setTimeout(() => reactFlowInstance.fitView({ padding: 0.2 }), 100);
   }, [projectId, reactFlowInstance]);
 
-  const toggleLayoutMode = useCallback(() => {
-    const p = useProjectStore.getState().projects.find(p => p.id === projectId);
-    if (!p) return;
-    const currentMode = p.settings?.graphLayoutMode || 'hierarchy';
-    const newMode = currentMode === 'hierarchy' ? 'circular' : currentMode === 'circular' ? 'force' : 'hierarchy';
-    // Clear saved positions so new layout takes full effect
-    savedPositionsRef.current = {};
-    useProjectStore.getState().updateProject(projectId, {
-      settings: {
-        ...(p.settings || {}),
-        graphLayoutMode: newMode,
-        graphNodePositions: {},
-      },
-    });
-    setTimeout(() => reactFlowInstance.fitView({ padding: 0.2 }), 150);
-  }, [projectId, reactFlowInstance]);
-
   const onNodeClick = useCallback((_event: React.MouseEvent, node: any) => {
     if (node.id.startsWith('page-')) {
       const state = useProjectStore.getState();
       state.setActivePage(node.id.replace('page-', ''));
       state.setViewMode('both');
     }
+  }, []);
+
+  // ── Right-click context menu handlers ──
+  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: any) => {
+    event.preventDefault();
+    if (!node.id.startsWith('page-')) return;
+    
+    const store = useProjectStore.getState();
+    const page = store.pages.find(p => p.id === node.id.replace('page-', ''));
+    if (!page) return;
+    
+    // Any page that isn't already unlinked can be unlinked
+    const isUnlinked = !!page.metadata?.unlinkedFromGraph;
+    const hasPreviousParent = !!page.metadata?.previousParentId;
+    
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      nodeId: node.id,
+      pageId: page.id,
+      hasParent: !isUnlinked,
+      hasPreviousParent,
+    });
+  }, []);
+
+  const unlinkFromHierarchy = useCallback((pageId: string) => {
+    const store = useProjectStore.getState();
+    const page = store.pages.find(p => p.id === pageId);
+    if (!page) return;
+    
+    store.updatePage(pageId, {
+      metadata: {
+        ...page.metadata,
+        previousParentId: page.metadata?.parentId || null,
+        parentId: null,
+        unlinkedFromGraph: true,
+      },
+    });
+    setContextMenu(null);
+  }, []);
+
+  const relinkToHierarchy = useCallback((pageId: string) => {
+    const store = useProjectStore.getState();
+    const page = store.pages.find(p => p.id === pageId);
+    if (!page || !page.metadata?.previousParentId) return;
+    
+    store.updatePage(pageId, {
+      metadata: {
+        ...page.metadata,
+        parentId: page.metadata.previousParentId,
+        previousParentId: null,
+        unlinkedFromGraph: false,
+      },
+    });
+    setContextMenu(null);
   }, []);
 
   // ── Hover path highlighting: pure CSS injection (no React re-renders) ──
@@ -1697,12 +1563,14 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
   }, []);
 
   return (
+    <>
     <div style={{ width: '100%', height: '100%' }} className="rounded-lg overflow-hidden relative">        <ReactFlow 
         nodes={nodes} 
         edges={edges} 
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
+        onNodeContextMenu={onNodeContextMenu}
         onNodeMouseEnter={onNodeMouseEnter}
         onNodeMouseLeave={onNodeMouseLeave}
         onNodeDragStart={onNodeDragStart}
@@ -1712,6 +1580,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
         onConnect={onConnect}
         nodeTypes={nodeTypes} 
         edgeTypes={edgeTypes}
+        defaultEdgeOptions={{ type: 'customAnimated' }}
         connectionRadius={30}
         connectionLineStyle={{ stroke: '#98cbff', strokeWidth: 2, filter: 'drop-shadow(0 0 4px #98cbff)' }}
         zoomOnScroll={true}
@@ -1727,20 +1596,6 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
           position="bottom-right" 
           className="opacity-20 hover:opacity-100 transition-opacity [&>button]:bg-surface-variant [&>button]:border-outline/20 [&>button]:text-on-surface-variant [&>button:hover]:bg-surface" 
         />
-
-        {/* Layout toggle button */}
-        <div className="absolute bottom-[160px] right-3 z-10">
-          <Tooltip label={graphLayoutMode === 'hierarchy' ? 'Switch to circular layout' : graphLayoutMode === 'circular' ? 'Switch to force layout' : 'Switch to hierarchy layout'} position="left">
-            <button
-              onClick={toggleLayoutMode}
-              className="flex items-center justify-center w-8 h-8 rounded-lg bg-surface-variant border border-outline/20 text-on-surface-variant hover:bg-surface hover:text-on-surface transition-all cursor-pointer opacity-20 hover:opacity-100"
-            >
-              <span className="material-symbols-outlined text-[16px]">
-                {graphLayoutMode === 'hierarchy' ? 'blur_circular' : graphLayoutMode === 'circular' ? 'scatter_plot' : 'account_tree'}
-              </span>
-            </button>
-          </Tooltip>
-        </div>
 
         {/* Reset layout button */}
         <div className="absolute bottom-[116px] right-3 z-10">
@@ -1813,6 +1668,41 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
         </div>
       )}
     </div>
+
+      {/* ── Right-click context menu (portaled to body to avoid overflow/transform issues) ── */}
+      {contextMenu && createPortal(
+        <div
+          className="fixed z-[80]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="bg-surface border border-outline/20 rounded-xl shadow-2xl p-1.5 min-w-[180px] overflow-hidden">
+            {contextMenu.hasParent && (
+              <button
+                onClick={() => unlinkFromHierarchy(contextMenu.pageId)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-on-surface/10 transition-colors text-left"
+              >
+                <span className="material-symbols-outlined text-[16px] text-warning">link_off</span>
+                <span>Unlink from hierarchy</span>
+              </button>
+            )}
+            {contextMenu.hasPreviousParent && (
+              <button
+                onClick={() => relinkToHierarchy(contextMenu.pageId)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-on-surface/10 transition-colors text-left"
+              >
+                <span className="material-symbols-outlined text-[16px] text-primary">link</span>
+                <span>Relink to hierarchy</span>
+              </button>
+            )}
+            {!contextMenu.hasParent && !contextMenu.hasPreviousParent && (
+              <div className="px-3 py-2 text-xs text-on-surface-variant/40 italic">No actions available</div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 };
 
@@ -1820,11 +1710,136 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({ projectId }) => {
    Sub-graph builders
    ═══════════════════════════════════════════════ */
 
+/** Resolve cell value to human-readable label. For predefined: resolve option IDs.
+ *  For page-link: look up page titles. For attachment: look up file names. */
+function resolveDisplayValue(rawVal: any, col: any, allPages?: any[]): string {
+  if (rawVal == null) return '';
+  if (col.type === 'predefined' && rawVal) {
+    const valIds = String(rawVal).split(',').filter(Boolean);
+    const labels = valIds.map((id: string) => {
+      const opt = col.options?.find((o: any) => o.id === id);
+      return opt?.value || (id.startsWith('opt_') ? id.slice(4, 12) : id);
+    });
+    return labels.join(', ').substring(0, 20);
+  }
+  if (col.type === 'page link' && rawVal && allPages) {
+    const ids = String(rawVal).split(',').filter(Boolean);
+    const labels = ids.map((id: string) => {
+      const p = allPages.find((pg: any) => pg.id === id);
+      return p?.title || id.slice(0, 8);
+    });
+    return labels.join(', ').substring(0, 20);
+  }
+  if (col.type === 'attachment' && rawVal && allPages) {
+    for (const fp of allPages) {
+      if (fp.type !== 'file' || !Array.isArray(fp.content)) continue;
+      for (const item of fp.content) {
+        if (!item.id || !item.originalName) continue;
+        if (rawVal.includes(item.originalName) || item.originalName.includes(rawVal)) {
+          return item.originalName.substring(0, 20);
+        }
+      }
+    }
+    return String(rawVal).substring(0, 20);
+  }
+  return String(rawVal).substring(0, 20);
+}
+
+/**
+ * Scan a row's cells for columns that reference other data (attachment -> file,
+ * page link -> page, gallery -> image, media -> audio/video) and create edges from
+ * the row to the referenced node during graph rebuild.
+ */
+function createCellEdges(
+  row: any,
+  rIndex: number,
+  page: any,
+  columns: any[],
+  allPages: any[],
+  newEdges: any[],
+) {
+  const rowId = 'row-' + page.id + '-' + rIndex;
+  columns.forEach((col: any) => {
+    const rawVal = row[col.id];
+    if (!rawVal || typeof rawVal !== 'string') return;
+
+    if (col.type === 'attachment') {
+      for (const fp of allPages) {
+        if (fp.type !== 'file' || !Array.isArray(fp.content)) continue;
+        for (const item of fp.content) {
+          if (!item.id || !item.originalName) continue;
+          if (rawVal.includes(item.originalName) || item.originalName.includes(rawVal)) {
+            const edgeId = 'edge-row-link-' + page.id + '-' + rIndex + '-file-' + item.id;
+            if (!newEdges.some((e: any) => e.id === edgeId)) {
+              newEdges.push({
+                id: edgeId,
+                source: rowId,
+                sourceHandle: 'col-' + col.id,
+                target: 'file-' + fp.id + '-' + item.id,
+                animated: true,
+                style: { stroke: 'rgba(245, 158, 11, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
+              });
+            }
+            return;
+          }
+        }
+      }
+    } else if (col.type === 'page link') {
+      const ids = String(rawVal).split(',').filter(Boolean);
+      ids.forEach((pageId: string) => {
+        const tgtPage = allPages.find((p: any) => p.id === pageId);
+        if (!tgtPage) return;
+        const edgeId = 'edge-row-link-' + page.id + '-' + rIndex + '-page-' + pageId;
+        if (!newEdges.some((e: any) => e.id === edgeId)) {
+          newEdges.push({
+            id: edgeId,
+            source: rowId,
+                sourceHandle: 'col-' + col.id,
+            target: 'page-' + pageId,
+            animated: true,
+            style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
+          });
+        }
+      });
+    } else if (col.type === 'gallery' || col.type === 'media') {
+      let ids: string[];
+      try {
+        const parsed = JSON.parse(rawVal);
+        ids = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        ids = String(rawVal).split(',').filter(Boolean);
+      }
+      ids.forEach((itemId: string) => {
+        for (const gp of allPages) {
+          if ((col.type === 'gallery' && gp.type !== 'gallery') ||
+              (col.type === 'media' && gp.type !== 'video' && gp.type !== 'audio')) continue;
+          if (!Array.isArray(gp.content)) continue;
+          if (!gp.content.some((i: any) => i.id === itemId)) continue;
+          const prefix = gp.type === 'gallery' ? 'img' : gp.type === 'video' ? 'vid' : 'aud';
+          const nodeId = prefix + '-' + gp.id + '-' + itemId;
+          const edgeId = 'edge-row-link-' + page.id + '-' + rIndex + '-' + prefix + '-' + itemId;
+          if (!newEdges.some((e: any) => e.id === edgeId)) {
+            newEdges.push({
+              id: edgeId,
+              source: rowId,
+                sourceHandle: 'col-' + col.id,
+              target: nodeId,
+              animated: true,
+              style: { stroke: 'rgba(6, 182, 212, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
+            });
+          }
+          break;
+        }
+      });
+    }
+  });
+}
+
 function buildTableSubGraph(
   page: any,
-  projectPages: any[],
   newNodes: any[],
   newEdges: any[],
+  allPages?: any[],
 ) {
   const columns = page.metadata?.columns || [];
   const visibleCols = page.metadata?.graphVisibleColumns?.length
@@ -1840,7 +1855,7 @@ function buildTableSubGraph(
       .map(id => columns.find((c: any) => c.id === id))
       .filter((c: any) => c && c.type === 'predefined');
     if (validCols.length > 0) {
-      buildTableSubGraphWithSortBy(page, columns, visibleCols, primaryCol, validCols.map((c: any) => c.id), projectPages, newNodes, newEdges);
+      buildTableSubGraphWithSortBy(page, columns, visibleCols, primaryCol, validCols.map((c: any) => c.id), newNodes, newEdges, allPages);
       return;
     }
   }
@@ -1855,7 +1870,7 @@ function buildTableSubGraph(
       .filter((col: any) => visibleCols.includes(col.id))
       .map((col: any) => {
         const rawVal = row[col.id];
-        const displayVal = rawVal != null ? String(rawVal).substring(0, 20) : '';
+        const displayVal = resolveDisplayValue(rawVal, col, allPages);
         let color: string | undefined;
         if (col.type === 'predefined' && rawVal) {
           const valIds = String(rawVal).split(',').filter(Boolean);
@@ -1895,180 +1910,20 @@ function buildTableSubGraph(
       animated: true,
       style: { stroke: getPrimaryRgba(0.4), strokeWidth: 2 },
     });
-
-    addRowCellNodes(page, row, rIndex, columns, visibleCols, primaryCol, rowId, projectPages, newNodes, newEdges);
+    createCellEdges(row, rIndex, page, columns, allPages || [], newEdges);
   });
 }
 
-/** Add cell nodes for a given row (used by both default and sort-by modes) */
-function addRowCellNodes(
-  page: any,
-  row: any,
-  rIndex: number,
-  columns: any[],
-  visibleCols: string[],
-  primaryCol: any,
-  parentNodeId: string,
-  projectPages: any[],
-  newNodes: any[],
-  newEdges: any[],
-) {
-  columns.forEach((col: any) => {
-    if (col.id === primaryCol.id || !visibleCols.includes(col.id)) return;
-    const rawCellValue = row[col.id];
-    if (rawCellValue == null || rawCellValue === '') return;
 
-    let valueIds: string[];
-    if (col.type === 'gallery') {
-      try {
-        const parsed = JSON.parse(String(rawCellValue));
-        valueIds = Array.isArray(parsed) ? parsed.filter(Boolean) : [String(rawCellValue)];
-      } catch {
-        valueIds = String(rawCellValue).split(',').filter(Boolean);
-      }
-    } else if (col.type === 'predefined' || col.type === 'page link') {
-      valueIds = String(rawCellValue).split(',').filter(Boolean);
-    } else if (col.type === 'media') {
-      try {
-        const parsed = JSON.parse(String(rawCellValue));
-        valueIds = Array.isArray(parsed) ? parsed.filter(Boolean) : [String(rawCellValue)];
-      } catch {
-        valueIds = String(rawCellValue).split(',').filter(Boolean);
-      }
-    } else {
-      valueIds = [String(rawCellValue)];
-    }
-
-    valueIds.forEach((singleVal: string, vIdx: number) => {
-      if (col.type === 'page link') {
-        const linkedPage = projectPages.find(p => p.id === singleVal);
-        if (linkedPage) {
-          const refEdgeId = `edge-table-link-${parentNodeId}-${singleVal}`;
-          const alreadyExists = newEdges.some(e => e.id === refEdgeId);
-          if (!alreadyExists) {
-            newEdges.push({
-              id: refEdgeId,
-              source: parentNodeId,
-              sourceHandle: `col-${col.id}`,
-              target: `page-${singleVal}`,
-              animated: true,
-              style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
-            });
-          }
-        }
-        return;
-      }
-
-      if (col.type === 'attachment') {
-        return;
-      }
-
-      if (col.type === 'gallery') {
-        const galleryPage = projectPages.find(p =>
-          p.type === 'gallery' && Array.isArray(p.content) && p.content.some((item: any) => item.id === singleVal)
-        );
-        if (galleryPage) {
-          const imgNodeId = `img-${galleryPage.id}-${singleVal}`;
-          const refEdgeId = `edge-table-img-${parentNodeId}-${singleVal}`;
-          const alreadyExists = newEdges.some(e => e.id === refEdgeId);
-          if (!alreadyExists) {
-            newEdges.push({
-              id: refEdgeId,
-              source: parentNodeId,
-              sourceHandle: `col-${col.id}`,
-              target: imgNodeId,
-              animated: true,
-              style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
-            });
-          }
-        }
-        return;
-      }
-
-      if (col.type === 'media') {
-        const mediaPage = projectPages.find(p =>
-          (p.type === 'audio' || p.type === 'video') && Array.isArray(p.content) && p.content.some((item: any) => item.id === singleVal)
-        );
-        if (mediaPage) {
-          const prefix = mediaPage.type === 'video' ? 'vid' : 'aud';
-          const mediaNodeId = `${prefix}-${mediaPage.id}-${singleVal}`;
-          const refEdgeId = `edge-table-media-${parentNodeId}-${singleVal}`;
-          const alreadyExists = newEdges.some(e => e.id === refEdgeId);
-          if (!alreadyExists) {
-            newEdges.push({
-              id: refEdgeId,
-              source: parentNodeId,
-              sourceHandle: `col-${col.id}`,
-              target: mediaNodeId,
-              animated: true,
-              style: { stroke: 'rgba(251, 191, 36, 0.5)', strokeWidth: 1.5, strokeDasharray: '5,4' },
-            });
-          }
-        }
-        return;
-      }
-
-      let cellLabel = singleVal;
-      let bgColor: string | undefined;
-      let textColor: string | undefined;
-
-      if (col.type === 'predefined') {
-        const opt = col.options?.find((o: any) => o.id === singleVal);
-        if (opt) {
-          cellLabel = opt.value;
-          bgColor = opt.color;
-          textColor = getContrastColor(opt.color);
-        }
-      }
-
-      const cellId = `cell-${page.id}-${rIndex}-${col.id}-${vIdx}`;
-
-      const nodeData: any = {
-        label: String(cellLabel).substring(0, 20),
-        icon: col.icon || 'Label',
-        colType: col.type,
-      };
-      if (bgColor) {
-        nodeData.backgroundColor = bgColor;
-        nodeData.textColor = textColor;
-      } else {
-        nodeData.color = 'bg-tertiary/20 text-tertiary';
-      }
-
-      newNodes.push({
-        id: cellId,
-        type: 'valueNode',
-        data: nodeData,
-        position: { x: 0, y: 0 },
-      });
-      newEdges.push({
-        id: `edge-cell-${page.id}-${rIndex}-${col.id}-${vIdx}`,
-        source: parentNodeId,
-        sourceHandle: `col-${col.id}`,
-        target: cellId,
-        animated: true,
-        style: { stroke: getPrimaryRgba(0.4), strokeWidth: 2 },
-      });
-    });
-  });
-}
-
-/**
- * Multi-column sort-by mode: restructure the table sub-graph so predefined values
- * create a nested grouping hierarchy. The order of sortByColIds determines the
- * grouping level (first = top level). For each row, the Cartesian product of all
- * sort-by values is computed, producing a path table → level0 → level1 → … → row.
- * Shared grouping nodes are reused across rows with the same value path.
- */
 function buildTableSubGraphWithSortBy(
   page: any,
   columns: any[],
   visibleCols: string[],
   primaryCol: any,
   sortByColIds: string[],
-  projectPages: any[],
   newNodes: any[],
   newEdges: any[],
+  allPages?: any[],
 ) {
   const createdNodeIds = new Set<string>();
 
@@ -2096,7 +1951,7 @@ function buildTableSubGraphWithSortBy(
         .filter((col: any) => visibleCols.includes(col.id))
         .map((col: any) => {
           const rawVal = row[col.id];
-          const displayVal = rawVal != null ? String(rawVal).substring(0, 20) : '';
+          const displayVal = resolveDisplayValue(rawVal, col, allPages);
           let color: string | undefined;
           if (col.type === 'predefined' && rawVal) {
             const valIds = String(rawVal).split(',').filter(Boolean);
@@ -2118,8 +1973,7 @@ function buildTableSubGraphWithSortBy(
         animated: true,
         style: { stroke: getPrimaryRgba(0.4), strokeWidth: 2 },
       });
-      const cellVisibleCols = visibleCols.filter((cId: string) => !sortByColIds.includes(cId));
-      addRowCellNodes(page, row, rIndex, columns, cellVisibleCols, primaryCol, rowId, projectPages, newNodes, newEdges);
+      createCellEdges(row, rIndex, page, columns, allPages || [], newEdges);
       return;
     }
 
@@ -2165,7 +2019,17 @@ function buildTableSubGraphWithSortBy(
 
         if (!createdNodeIds.has(nodeId)) {
           createdNodeIds.add(nodeId);
-          const sortValueLabel = opt?.value || valId;
+          // Resolve option label: search all columns first, fallback to readable ID
+          let sortValueLabel = opt?.value;
+          if (!sortValueLabel) {
+            for (const c of columns) {
+              const found = c.options?.find((o: any) => o.id === valId);
+              if (found?.value) { sortValueLabel = found.value; break; }
+            }
+          }
+          if (!sortValueLabel) {
+            sortValueLabel = valId.startsWith('opt_') ? valId.slice(4).slice(0, 8) : valId;
+          }
           const sortColor = opt?.color || '#60a5fa';
 
           const sortCol = columns.find((c: any) => c.id === colId);
@@ -2201,7 +2065,7 @@ function buildTableSubGraphWithSortBy(
           .filter((col: any) => visibleCols.includes(col.id))
           .map((col: any) => {
             const rawVal = row[col.id];
-            const displayVal = rawVal != null ? String(rawVal).substring(0, 20) : '';
+            const displayVal = resolveDisplayValue(rawVal, col, allPages);
             let color: string | undefined;
             if (col.type === 'predefined' && rawVal) {
               const valIds = String(rawVal).split(',').filter(Boolean);
@@ -2231,9 +2095,8 @@ function buildTableSubGraphWithSortBy(
     // Add cell nodes once per row, excluding all sort-by columns
     const rowId = `row-${page.id}-${rIndex}`;
     if (newNodes.some(n => n.id === rowId)) {
-      const cellVisibleCols = visibleCols.filter((cId: string) => !sortByColIds.includes(cId));
-      addRowCellNodes(page, row, rIndex, columns, cellVisibleCols, primaryCol, rowId, projectPages, newNodes, newEdges);
     }
+    createCellEdges(row, rIndex, page, columns, allPages || [], newEdges);
   });
 }
 

@@ -60,8 +60,12 @@ function getDefaultKeys(type: ChartType) {
 }
 
 export function ChartView() {
-  const { pages, activePageId, updatePageContent, updatePage } = useProjectStore();
-  const activePage = pages.find(p => p.id === activePageId);
+  const pages = useProjectStore(s => s.pages);
+  const activePageId = useProjectStore(s => s.activePageId);
+  const updatePageContent = useProjectStore(s => s.updatePageContent);
+  const updatePage = useProjectStore(s => s.updatePage);
+
+  const activePage = useMemo(() => pages.find(p => p.id === activePageId), [pages, activePageId]);
 
   const chartType: ChartType | null = activePage?.metadata?.chartType || null;
   const chartConfig = activePage?.metadata?.chartConfig || {};
@@ -74,14 +78,15 @@ export function ChartView() {
   const [newRowData, setNewRowData] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (activePage?.content && Array.isArray(activePage.content)) {
-      setData(activePage.content);
+    const page = pages.find(p => p.id === activePageId);
+    if (page?.content && Array.isArray(page.content)) {
+      setData(page.content);
     } else if (chartType) {
       setData(generateDefaultData(chartType));
     } else {
       setData([]);
     }
-  }, [activePage?.content, activePageId, chartType]);
+  }, [activePageId, pages, chartType]);
 
   const saveContent = useCallback((newData: Record<string, any>[]) => {
     setData(newData);

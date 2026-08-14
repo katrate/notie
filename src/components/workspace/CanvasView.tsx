@@ -444,7 +444,9 @@ function eraserHits(eraserPoints: Point[], eraserWidth: number, stroke: Stroke):
    ═══════════════════════════════════════════════ */
 
 export function CanvasView() {
-  const { activePageId, pages, updatePageContent } = useProjectStore()
+  const activePageId = useProjectStore(s => s.activePageId)
+  const pages = useProjectStore(s => s.pages)
+  const updatePageContent = useProjectStore(s => s.updatePageContent)
 
   // Canvas refs
   const canvasRef = useRef<HTMLCanvasElement>(null)

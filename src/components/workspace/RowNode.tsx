@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Handle, Position, useEdges } from '@xyflow/react';
 
 const TEXT_TYPES = new Set(['text', 'number', 'url', 'email', 'page link', 'predefined', 'boolean', 'date']);
+const LINK_TYPES = new Set(['attachment', 'page link', 'gallery', 'media', 'predefined']);
 
 function getContrastColor(hex: string): string {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -80,41 +81,43 @@ export const RowNode = React.memo(function RowNode({ id, data }: any) {
                 </div>
               )}
 
-              <Handle
-                type="source"
-                position={Position.Right}
-                id={handleId}
-                className="!relative !transform-none !static cursor-crosshair"
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  flexShrink: 0,
-                  backgroundColor: isConnected
-                    ? (col.color || '#98cbff')
-                    : 'rgba(255,255,255,0.15)',
-                  border: isConnected
-                    ? `2px solid ${col.color || '#98cbff'}`
-                    : '2px solid rgba(255,255,255,0.3)',
-                  opacity: isConnected ? 1 : 0.35,
-                  transition: 'all 0.15s ease',
-                  boxShadow: isConnected
-                    ? `0 0 6px ${(col.color || '#98cbff') + '80'}`
-                    : 'none',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isConnected) {
-                    (e.currentTarget as HTMLElement).style.opacity = '1';
-                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.7)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isConnected) {
-                    (e.currentTarget as HTMLElement).style.opacity = '0.35';
-                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.3)';
-                  }
-                }}
-              />
+              {LINK_TYPES.has(col.type) && (
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={handleId}
+                  className="!static cursor-crosshair"
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                    backgroundColor: isConnected
+                      ? (col.color || '#98cbff')
+                      : 'rgba(255,255,255,0.15)',
+                    border: isConnected
+                      ? `2px solid ${col.color || '#98cbff'}`
+                      : '2px solid rgba(255,255,255,0.3)',
+                    opacity: isConnected ? 1 : 0.35,
+                    transition: 'all 0.15s ease',
+                    boxShadow: isConnected
+                      ? `0 0 6px ${(col.color || '#98cbff') + '80'}`
+                      : 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isConnected) {
+                      (e.currentTarget as HTMLElement).style.opacity = '1';
+                      (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.7)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isConnected) {
+                      (e.currentTarget as HTMLElement).style.opacity = '0.35';
+                      (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.3)';
+                    }
+                  }}
+                />
+              )}
             </div>
           );
         })}
